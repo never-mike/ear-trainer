@@ -73,7 +73,8 @@ trap 'rm -rf "$tmp"' EXIT
   echo "window.VOICE_DATA = {"
   for i in {1..${#names}}; do
     say -v "$VOICE" -o "$tmp/$i.aiff" "${names[$i]}"
-    afconvert -f m4af -d aac -b 64000 "$tmp/$i.aiff" "$tmp/$i.m4a"
+    # Речь моно 22 кГц: 32 kbps хватает, а файл на треть меньше, чем при 64
+    afconvert -f m4af -d aac -b 32000 "$tmp/$i.aiff" "$tmp/$i.m4a"
     echo "  '${names[$i]}': '$(base64 -i "$tmp/$i.m4a")',"
   done
   echo "};"
