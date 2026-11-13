@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Intervals · Ear Trainer</title>
+<link rel="stylesheet" href="assets/css/common.css">
+</head>
+<body>
+  <a class="back" href="index.html">‹ Trainers</a>
+
+  <div class="screen">
+    <div id="status">Press Start</div>
+    <div id="answer"></div>
+    <div id="notes"></div>
+    <div id="diag"></div>
+  </div>
+
+  <div class="controls">
+    <div id="intervals" class="toggles" role="group" aria-label="Intervals"></div>
+    <label>Tempo, bpm
+      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
+    </label>
+    <label>Mode
+      <select id="mode">
+        <option value="melodic">Melodic</option>
+        <option value="harmonic">Harmonic</option>
+        <option value="mixed">Mixed</option>
+      </select>
+    </label>
+    <label>Direction
+      <select id="direction">
+        <option value="up">Ascending</option>
+        <option value="down">Descending</option>
+        <option value="mixed" selected>Mixed</option>
+      </select>
+    </label>
+    <label>Replay after answer
+      <input id="replay" type="checkbox" checked>
+    </label>
+    <div class="buttons">
+      <button id="start">Start</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+  </div>
+
+<script src="assets/voice/intervals.js"></script>
+<script src="assets/js/common.js"></script>
+<script>
+// Тренировка интервалов. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
+const ET = EarTrainer;
+
+const HALF_BEATS = 2;      // мелодически: каждая нота — половинная
+const WHOLE_BEATS = 4;     // гармонически: целая нота
+
+// Индекс = число полутонов; тот же порядок в assets/voice/intervals.js и make-voice.sh
+const INTERVALS = [
+  null,
+  'Minor second', 'Major second', 'Minor third', 'Major third',
+  'Perfect fourth', 'Tritone', 'Perfect fifth', 'Minor sixth',
+  'Major sixth', 'Minor seventh', 'Major seventh', 'Octave',
+];
+const SHORT_NAMES = [null, 'm2', 'M2', 'm3', 'M3', 'P4', 'TT', 'P5', 'm6', 'M6', 'm7', 'M7', 'P8'];
+
+const modeEl = document.getElementById('mode');
+const directionEl = document.getElementById('direction');
+
+const trainer = ET.create({ id: 'intervals', pickQuestion, play, describe });
+trainer.persist(modeEl, 'mode');
+trainer.persist(directionEl, 'direction');
+
+// Числа полутонов, которые участвуют в тренировке
+const enabled = trainer.toggleGroup(
+  document.getElementById('intervals'),
+  INTERVALS.slice(1).map((name, i) => ({ id: i + 1, label: SHORT_NAMES[i + 1], title: name })),
+  'intervals',
+);
+
+function pickQuestion() {
+  const pool = [...enabled];       // только выбранные интервалы
+  const semitones = pool[ET.rand(pool.length)];
+  const low = ET.LOW + ET.rand(ET.HIGH - ET.LOW - semitones + 1);
+  const high = low + semitones;
+  const mode = modeEl.value;
+  const harmonic = mode === 'harmonic' || (mode === 'mixed' && ET.rand(2) === 0);
+  const dir = directionEl.value;   // влияет только на мелодический режим
+  const ascending = harmonic || dir === 'up' || (dir === 'mixed' && ET.rand(2) === 0);
+  return {
+    semitones, harmonic, ascending,
+    first: ascending ? low : high,
+    second: ascending ? high : low,
+  };
+}
+
+// Планирует интервал с момента t, возвращает его длительность в секундах
+function play(q, t, beat) {
+  if (q.harmonic) {
+    const whole = WHOLE_BEATS * beat;
+    ET.playNote(q.first, t, whole);
+    ET.playNote(q.second, t, whole);
+    return whole;
+  }
+  const half = HALF_BEATS * beat;
+  ET.playNote(q.first, t, half);
+  ET.playNote(q.second, t + half, half);
+  return half * 2;
+}
+
+function describe(q) {
+  return {
+    label: q.harmonic ? 'harmonic' : 'melodic',
+    answer: INTERVALS[q.semitones],
+    notes: q.harmonic
+      ? `${ET.noteName(q.first)} + ${ET.noteName(q.second)}`
+      : `${ET.noteName(q.first)} ${q.ascending ? '↑' : '↓'} ${ET.noteName(q.second)}`,
+    voice: q.semitones,
+  };
+}
+</script>
+</body>
+</html>

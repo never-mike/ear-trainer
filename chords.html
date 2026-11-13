@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Chords · Ear Trainer</title>
+<link rel="stylesheet" href="assets/css/common.css">
+</head>
+<body>
+  <a class="back" href="index.html">‹ Trainers</a>
+
+  <div class="screen">
+    <div id="status">Press Start</div>
+    <div id="answer"></div>
+    <div id="notes"></div>
+    <div id="diag"></div>
+  </div>
+
+  <div class="controls">
+    <details class="group">
+      <summary>Chord types <span id="chordCount"></span></summary>
+      <div id="chords" class="toggles cols-5" role="group" aria-label="Chord types"></div>
+    </details>
+    <label>Tempo, bpm
+      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
+    </label>
+    <label>Mode
+      <select id="mode">
+        <option value="block" selected>Block</option>
+        <option value="arpeggio">Arpeggio</option>
+        <option value="mixed">Mixed</option>
+      </select>
+    </label>
+    <label>Inversion
+      <select id="inversion">
+        <option value="0" selected>Root position</option>
+        <option value="1">1st inversion</option>
+        <option value="2">2nd inversion</option>
+        <option value="3">3rd inversion</option>
+        <option value="random">Random</option>
+      </select>
+    </label>
+    <label>Replay after answer
+      <input id="replay" type="checkbox" checked>
+    </label>
+    <div class="buttons">
+      <button id="start">Start</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+  </div>
+
+<script src="assets/voice/chords.js"></script>
+<script src="assets/js/common.js"></script>
+<script>
+// Тренировка видов аккордов. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
+const ET = EarTrainer;
+
+const WHOLE_BEATS = 4;     // аккорд целиком звучит целую ноту (такт)
+const ARPEGGIO_BEATS = 1;  // арпеджио: ноты вступают через четверть и звучат до конца последнего такта
+const MAX_INVERSION = 3;   // обращения выше третьего не используются (и не озвучены)
+const CHORD_LOW = 48;      // C3: ниже аккорды в тесном расположении звучат неразборчиво
+const NOTES_LEVEL = 2;     // суммарная громкость нот аккорда — как у двух нот интервала
+
+// Индекс = номер записи в assets/voice/chords.js; тот же порядок в make-voice.sh.
+// steps — полутоны от основного тона в основном виде; off — вид выключен по умолчанию.
+// У 11, maj7♯11, 13 и m13 часть ступеней пропущена, как это принято на практике.
+const CHORDS = [
+  null,
+  { name: 'Major',               short: 'maj',  steps: [0, 4, 7] },
+  { name: 'Minor',               short: 'min',  steps: [0, 3, 7] },
+  { name: 'Diminished',          short: 'dim',  steps: [0, 3, 6] },
+  { name: 'Augmented',           short: 'aug',  steps: [0, 4, 8] },
+  { name: 'Sus2',                short: 'sus2', steps: [0, 2, 7] },
+  { name: 'Sus4',                short: 'sus4', steps: [0, 5, 7] },
+  { name: 'Major seventh',       short: 'maj7', steps: [0, 4, 7, 11] },
+  { name: 'Dominant seventh',    short: '7',    steps: [0, 4, 7, 10] },
+  { name: 'Minor seventh',       short: 'm7',   steps: [0, 3, 7, 10] },
+  { name: 'Half-diminished',     short: 'm7♭5', steps: [0, 3, 6, 10] },
+  { name: 'Diminished seventh',  short: 'dim7', steps: [0, 3, 6, 9] },
+  { name: 'Minor major seventh', short: 'mM7',  steps: [0, 3, 7, 11] },
+  // Дополнительные виды
+  { name: 'Power chord',         short: '5',       steps: [0, 7],                   off: true },
+  { name: 'Major sixth',         short: '6',       steps: [0, 4, 7, 9],             off: true },
+  { name: 'Minor sixth',         short: 'm6',      steps: [0, 3, 7, 9],             off: true },
+  { name: 'Six-nine',            short: '6/9',     steps: [0, 4, 7, 9, 14],         off: true },
+  { name: 'Add9',                short: 'add9',    steps: [0, 4, 7, 14],            off: true },
+  { name: 'Minor add9',          short: 'madd9',   steps: [0, 3, 7, 14],            off: true },
+  { name: 'Add11',               short: 'add11',   steps: [0, 4, 7, 17],            off: true },
+  { name: '7sus4',               short: '7sus4',   steps: [0, 5, 7, 10],            off: true },
+  { name: '7♭5',                 short: '7♭5',     steps: [0, 4, 6, 10],            off: true },
+  { name: '7♯5',                 short: '7♯5',     steps: [0, 4, 8, 10],            off: true },
+  { name: 'Maj7♯5',              short: 'maj7♯5',  steps: [0, 4, 8, 11],            off: true },
+  { name: 'Dominant ninth',      short: '9',       steps: [0, 4, 7, 10, 14],        off: true },
+  { name: 'Major ninth',         short: 'maj9',    steps: [0, 4, 7, 11, 14],        off: true },
+  { name: 'Minor ninth',         short: 'm9',      steps: [0, 3, 7, 10, 14],        off: true },
+  { name: '7♭9',                 short: '7♭9',     steps: [0, 4, 7, 10, 13],        off: true },
+  { name: '7♯9',                 short: '7♯9',     steps: [0, 4, 7, 10, 15],        off: true },
+  { name: 'Dominant eleventh',   short: '11',      steps: [0, 7, 10, 14, 17],       off: true },
+  { name: 'Minor eleventh',      short: 'm11',     steps: [0, 3, 7, 10, 14, 17],    off: true },
+  { name: 'Maj7♯11',             short: 'maj7♯11', steps: [0, 4, 7, 11, 18],        off: true },
+  { name: 'Dominant thirteenth', short: '13',      steps: [0, 4, 7, 10, 14, 21],    off: true },
+  { name: 'Minor thirteenth',    short: 'm13',     steps: [0, 3, 7, 10, 14, 21],    off: true },
+];
+const INVERSIONS = ['root position', '1st inversion', '2nd inversion', '3rd inversion'];
+const INVERSION_VOICE = CHORDS.length;   // записи после видов аккордов — названия обращений (0…3)
+
+const modeEl = document.getElementById('mode');
+const inversionEl = document.getElementById('inversion');
+
+const trainer = ET.create({ id: 'chords', pickQuestion, play, describe });
+trainer.persist(modeEl, 'mode');
+trainer.persist(inversionEl, 'inversion');
+
+// Индексы видов аккордов, которые участвуют в тренировке
+const enabled = trainer.toggleGroup(
+  document.getElementById('chords'),
+  CHORDS.slice(1).map((chord, i) => ({ id: i + 1, label: chord.short, title: chord.name, off: chord.off })),
+  'chords',
+  (set) => { document.getElementById('chordCount').textContent = `${set.size} of ${CHORDS.length - 1}`; },
+);
+
+function pickQuestion() {
+  const pool = [...enabled];       // только выбранные виды
+  const index = pool[ET.rand(pool.length)];
+  const steps = CHORDS[index].steps;
+
+  // Обращение: у трезвучий их три (0…2), у аккордов из четырёх и более нот — четыре (0…3).
+  // Если выбранного обращения у аккорда нет (3-е для трезвучия) — берём старшее из доступных.
+  const maxInversion = Math.min(MAX_INVERSION, steps.length - 1);
+  const random = inversionEl.value === 'random';
+  const inversion = random ? ET.rand(maxInversion + 1) : Math.min(Number(inversionEl.value), maxInversion);
+
+  // В обращении N басом становится N-я нота аккорда, а ноты ниже неё переносятся вверх на октаву
+  // (у аккордов шире октавы, например add9, — на две, иначе они остались бы ниже баса)
+  const bass = steps[inversion];
+  const offsets = steps.map((s, i) => {
+    if (i >= inversion) return s;
+    while (s < bass) s += 12;
+    return s;
+  }).sort((a, b) => a - b);
+  const lowestRoot = CHORD_LOW - offsets[0];
+  const highestRoot = ET.HIGH - offsets[offsets.length - 1];
+  const root = lowestRoot + ET.rand(highestRoot - lowestRoot + 1);
+
+  const mode = modeEl.value;
+  const arpeggio = mode === 'arpeggio' || (mode === 'mixed' && ET.rand(2) === 0);
+
+  return { index, inversion, random, arpeggio, notes: offsets.map((o) => root + o) };
+}
+
+// Планирует аккорд с момента t, возвращает его длительность в секундах
+function play(q, t, beat) {
+  const n = q.notes.length;
+  // Аккорд целиком занимает такт; арпеджио из пяти и более нот — два такта, чтобы все ноты уместились
+  const bars = q.arpeggio ? Math.ceil(n * ARPEGGIO_BEATS / WHOLE_BEATS) : 1;
+  const total = bars * WHOLE_BEATS * beat;
+  const level = NOTES_LEVEL / n;
+  q.notes.forEach((midi, i) => {
+    // Арпеджио — снизу вверх; каждая нота держится до конца, так что в итоге звучит весь аккорд
+    const delay = q.arpeggio ? i * ARPEGGIO_BEATS * beat : 0;
+    ET.playNote(midi, t + delay, total - delay, level);
+  });
+  return total;
+}
+
+function describe(q) {
+  return {
+    label: q.arpeggio ? 'arpeggio' : 'block',
+    answer: CHORDS[q.index].name,
+    notes: `${q.notes.map(ET.noteName).join(' ')} · ${INVERSIONS[q.inversion]}`,
+    // Обращение произносится, только когда оно случайное — иначе оно и так известно
+    voice: q.random ? [q.index, INVERSION_VOICE + q.inversion] : q.index,
+  };
+}
+</script>
+</body>
+</html>

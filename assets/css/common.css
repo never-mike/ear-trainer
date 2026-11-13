@@ -1,0 +1,65 @@
+/* Общие стили всех страниц: меню и тренировок */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: #111418; color: #e8eaed;
+  font: 17px/1.4 -apple-system, system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+  touch-action: manipulation;
+}
+
+/* ---------- Страница тренировки ---------- */
+.back { align-self: flex-start; padding: 4px 8px 4px 0; color: #8b93a1; text-decoration: none; }
+.screen {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; gap: 12px;
+}
+#status { color: #8b93a1; min-height: 1.4em; }
+#answer { font-size: 40px; font-weight: 700; line-height: 1.15; min-height: 2.3em; display: flex; align-items: center; }
+#notes { color: #8b93a1; font-size: 20px; min-height: 1.4em; font-variant-numeric: tabular-nums; }
+#diag { color: #e0776f; font-size: 14px; word-break: break-word; }
+.controls { display: flex; flex-direction: column; gap: 12px; }
+label { display: flex; justify-content: space-between; align-items: center; color: #8b93a1; }
+input { width: 5.5em; text-align: center; -webkit-user-select: text; user-select: text; }
+select, input {
+  font: inherit; color: #e8eaed; background: #1d2229;
+  border: 1px solid #2c333d; border-radius: 10px; padding: 8px 12px;
+}
+input[type="checkbox"] { width: 28px; height: 28px; padding: 0; accent-color: #2b5fb8; }
+.buttons { display: flex; gap: 12px; }
+button {
+  flex: 1; height: 72px; border: 0; border-radius: 16px;
+  font: 600 22px -apple-system, system-ui, sans-serif; color: #fff;
+}
+button:disabled { opacity: .35; }
+#start { background: #2e9e5b; }
+#stop { background: #c2453d; }
+
+/* Сетка кнопок-переключателей (EarTrainer.toggleGroup) */
+.toggles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.toggles button {
+  height: 44px; padding: 0; border-radius: 10px; font-size: 16px;
+  background: #1d2229; color: #8b93a1; border: 1px solid #2c333d;
+}
+.toggles.cols-5 { grid-template-columns: repeat(5, 1fr); }
+.toggles.cols-5 button { font-size: 15px; }
+.toggles button[aria-pressed="true"] { background: #2b5fb8; color: #fff; border-color: transparent; }
+
+/* Сворачиваемый блок настроек (длинные сетки переключателей) */
+details.group { border: 1px solid #2c333d; border-radius: 10px; padding: 0 12px; }
+details.group summary { padding: 10px 0; color: #8b93a1; }
+details.group summary span { float: right; }
+details.group[open] { padding-bottom: 12px; }
+
+/* ---------- Меню ---------- */
+h1 { margin: 24px 0; font-size: 28px; }
+.menu { display: flex; flex-direction: column; gap: 12px; }
+.menu a {
+  display: block; padding: 20px; border-radius: 16px;
+  background: #1d2229; border: 1px solid #2c333d;
+  color: #e8eaed; text-decoration: none; font-size: 22px; font-weight: 600;
+}
+.menu a span { display: block; margin-top: 4px; color: #8b93a1; font-size: 15px; font-weight: 400; }

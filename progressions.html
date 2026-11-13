@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Progressions · Ear Trainer</title>
+<link rel="stylesheet" href="assets/css/common.css">
+<style>
+  /* Ответ — несколько строк по четыре такта, поэтому шрифт меньше и переносы строк сохраняются */
+  #answer { font-size: 30px; white-space: pre-line; }
+  #notes { white-space: pre-line; }
+</style>
+</head>
+<body>
+  <a class="back" href="index.html">‹ Trainers</a>
+
+  <div class="screen">
+    <div id="status">Press Start</div>
+    <div id="answer"></div>
+    <div id="notes"></div>
+    <div id="diag"></div>
+  </div>
+
+  <div class="controls">
+    <label>Key
+      <select id="key">
+        <option value="random" selected>Random</option>
+        <option value="0">C</option>
+        <option value="1">D♭</option>
+        <option value="2">D</option>
+        <option value="3">E♭</option>
+        <option value="4">E</option>
+        <option value="5">F</option>
+        <option value="6">F♯</option>
+        <option value="7">G</option>
+        <option value="8">A♭</option>
+        <option value="9">A</option>
+        <option value="10">B♭</option>
+        <option value="11">B</option>
+      </select>
+    </label>
+    <label>Bars
+      <input id="bars" type="number" inputmode="numeric" min="1" max="16" step="1" value="4">
+    </label>
+    <label>Source
+      <select id="source">
+        <option value="common" selected>Common progressions</option>
+        <option value="random">Random</option>
+        <option value="mixed">Mixed</option>
+      </select>
+    </label>
+    <label>Keep the same progression
+      <input id="same" type="checkbox">
+    </label>
+    <label>Tempo, bpm
+      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
+    </label>
+    <label>Replay after answer
+      <input id="replay" type="checkbox" checked>
+    </label>
+    <div class="buttons">
+      <button id="start">Start</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+  </div>
+
+<script src="assets/voice/progressions.js"></script>
+<script src="assets/js/common.js"></script>
+<script>
+// Тренировка аккордовых прогрессий. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
+// Аккорды — ступени мажорного лада (I ii iii IV V vi vii°), по одному на такт, размер 4/4.
+const ET = EarTrainer;
+
+const BAR_BEATS = 4;         // размер 4/4
+const REPEATS = 4;           // в вопросе последовательность звучит столько раз подряд (в повторе после ответа — один)
+const MIN_BARS = 1;
+const MAX_BARS = 16;
+const DEFAULT_BARS = 4;
+const BASS_LOW = 40;         // E2: бас лежит в октаве E2…D♯3, верхние голоса — октавой выше
+const UPPER_LEVEL = 0.5;     // громкость каждой ноты трезвучия
+const BASS_LEVEL = 0.8;      // громкость баса
+const RING_EIGHTHS = 2;      // каждая восьмая звучит две восьмых — слитно, как с педалью
+
+// Ступени мажорного лада: индекс 0…6 = ступень I…VII
+const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];              // полутоны от тоники
+const QUALITY = ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'];
+const NUMERALS = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };   // всегда в основном виде
+const SUFFIX = { maj: '', min: 'm', dim: '°' };
+
+// Тональности: letter — индекс буквы тоники в LETTERS (нужен для правильной записи ♯/♭ в названиях
+// аккордов), pc — высотный класс тоники. Порядок совпадает со значениями <select id="key">.
+const LETTERS = 'CDEFGAB';
+const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
+const KEYS = [
+  { name: 'C', letter: 0, pc: 0 },   { name: 'D♭', letter: 1, pc: 1 },  { name: 'D', letter: 1, pc: 2 },
+  { name: 'E♭', letter: 2, pc: 3 },  { name: 'E', letter: 2, pc: 4 },   { name: 'F', letter: 3, pc: 5 },
+  { name: 'F♯', letter: 3, pc: 6 },  { name: 'G', letter: 4, pc: 7 },   { name: 'A♭', letter: 5, pc: 8 },
+  { name: 'A', letter: 5, pc: 9 },   { name: 'B♭', letter: 6, pc: 10 }, { name: 'B', letter: 6, pc: 11 },
+];
+
+// Общепринятые последовательности; числа — ступени 1…7
+const COMMON = [
+  // 2 такта
+  [1, 4], [1, 5], [1, 6],
+  // 3 такта
+  [1, 4, 5], [2, 5, 1],
+  // 4 такта
+  [1, 5, 6, 4],     // «ось» — самая частая в поп-музыке
+  [6, 4, 1, 5],     // она же с шестой ступени
+  [1, 6, 4, 5],     // 50-е, ду-воп
+  [1, 4, 5, 1],
+  [1, 4, 5, 4],
+  [1, 4, 1, 5],
+  [1, 4, 6, 5],
+  [1, 6, 2, 5],     // турнараунд
+  [2, 5, 1, 6],
+  [1, 3, 4, 5],
+  [4, 1, 5, 6],
+  [6, 5, 4, 5],
+  [4, 5, 3, 6],     // «королевская дорога»
+  // 8 тактов
+  [1, 5, 6, 3, 4, 1, 4, 5],     // канон Пахельбеля
+  [1, 5, 4, 4, 1, 5, 1, 5],     // восьмитактовый блюз
+  // 12 тактов
+  [1, 1, 1, 1, 4, 4, 1, 1, 5, 4, 1, 1],     // двенадцатитактовый блюз
+  [1, 4, 1, 1, 4, 4, 1, 1, 5, 4, 1, 5],     // он же с быстрой сменой и турнараундом
+].map((p) => p.map((degree) => degree - 1));
+
+// Веса ступеней для случайной генерации: главные ступени чаще, vii° — реже
+const RANDOM_WEIGHTS = [4, 2, 2, 4, 4, 3, 1];
+
+const keyEl = document.getElementById('key');
+const barsEl = document.getElementById('bars');
+const sourceEl = document.getElementById('source');
+const sameEl = document.getElementById('same');
+
+const trainer = ET.create({ id: 'progressions', pickQuestion, play, describe, onStart });
+trainer.persist(keyEl, 'key');
+trainer.persist(barsEl, 'bars');
+trainer.persist(sourceEl, 'source');
+trainer.persist(sameEl, 'same');
+
+// ---------- Генерация последовательности ----------
+
+function barCount() {
+  const n = Math.round(Number(barsEl.value)) || DEFAULT_BARS;
+  return Math.min(MAX_BARS, Math.max(MIN_BARS, n));
+}
+
+// Случайная последовательность: ступени по весам, без одинаковых аккордов в соседних тактах
+function randomProgression(bars) {
+  const result = [];
+  while (result.length < bars) {
+    const prev = result[result.length - 1];
+    const weights = RANDOM_WEIGHTS.map((w, degree) => (degree === prev ? 0 : w));
+    let pick = ET.rand(weights.reduce((a, b) => a + b, 0));
+    let degree = 0;
+    while (pick >= weights[degree]) pick -= weights[degree++];
+    result.push(degree);
+  }
+  return result;
+}
+
+// Последовательность из коллекции. Если есть готовые нужной длины — берём одну из них
+// (для длин больше четырёх тактов — через раз), иначе склеиваем из более коротких.
+function commonProgression(bars) {
+  const exact = COMMON.filter((p) => p.length === bars);
+  if (exact.length && (bars <= 4 || ET.rand(2) === 0)) return exact[ET.rand(exact.length)];
+
+  const result = [];
+  while (result.length < bars) {
+    const left = bars - result.length;
+    const fitting = COMMON.filter((p) => p.length <= left && p.length < bars);
+    if (!fitting.length) { result.push(0); continue; }     // остался один такт — тоника
+    // Пока места хватает — любые куски от четырёх тактов; в хвост — самый длинный из подходящих
+    const size = Math.min(4, Math.max(...fitting.map((p) => p.length)));
+    const pool = fitting.filter((p) => (size === 4 ? p.length >= 4 : p.length === size));
+    result.push(...pool[ET.rand(pool.length)]);
+  }
+  return result;
+}
+
+function generate(bars) {
+  const source = sourceEl.value;
+  const random = source === 'random' || (source === 'mixed' && ET.rand(2) === 0);
+  return random ? randomProgression(bars) : commonProgression(bars);
+}
+
+// ---------- Вопрос ----------
+
+let kept = null;          // последовательность, которая повторяется в режиме «Keep the same progression»
+let keptFor = '';         // настройки, при которых она создана: при их смене создаётся новая
+let lastKey = -1;         // чтобы случайная тональность не выпадала дважды подряд
+
+// Каждый Start начинает с новой последовательности, даже в режиме повтора
+function onStart() { kept = null; }
+
+function pickQuestion() {
+  const bars = barCount();
+  let degrees;
+  if (sameEl.checked) {
+    const settings = `${bars}|${sourceEl.value}`;
+    if (!kept || keptFor !== settings) { kept = generate(bars); keptFor = settings; }
+    degrees = kept;
+  } else {
+    kept = null;
+    degrees = generate(bars);
+  }
+
+  let key = Number(keyEl.value);
+  if (keyEl.value === 'random' || !KEYS[key]) {
+    do { key = ET.rand(KEYS.length); } while (key === lastKey);
+  }
+  lastKey = key;
+
+  // Аккорды всегда в основном виде: бас — основной тон в октаве E2…D♯3, трезвучие — октавой выше
+  const chords = degrees.map((degree) => {
+    const rootPc = (KEYS[key].pc + MAJOR_SCALE[degree]) % 12;
+    const bass = BASS_LOW + ((rootPc - BASS_LOW) % 12 + 12) % 12;
+    return { bass, upper: TRIAD[QUALITY[degree]].map((step) => bass + 12 + step) };
+  });
+
+  return { key, degrees, chords };
+}
+
+// Такт — восемь восьмых: трезвучие, бас, и так четыре раза (как во вступлении «Imagine»).
+// В вопросе последовательность звучит REPEATS раз подряд, в повторе после ответа — один раз.
+// Возвращает общую длительность в секундах.
+function play(q, t, beat, replay) {
+  const eighth = beat / 2;
+  const bar = BAR_BEATS * beat;
+  const ring = RING_EIGHTHS * eighth;
+  const times = replay ? 1 : REPEATS;
+  const bars = q.chords.length;
+  for (let r = 0; r < times; r++) {
+    q.chords.forEach((chord, i) => {
+      for (let k = 0; k < BAR_BEATS; k++) {
+        const at = t + (r * bars + i) * bar + k * beat;
+        for (const midi of chord.upper) ET.playNote(midi, at, ring, UPPER_LEVEL);
+        ET.playNote(chord.bass, at + eighth, ring, BASS_LEVEL);
+      }
+    });
+  }
+  return times * bars * bar;
+}
+
+// ---------- Ответ ----------
+
+// Название аккорда на ступени: буква берётся по гамме, знак — по разнице с высотой этой буквы
+function chordName(key, degree) {
+  const letter = (KEYS[key].letter + degree) % 7;
+  const pc = (KEYS[key].pc + MAJOR_SCALE[degree]) % 12;
+  const shift = ((pc - LETTER_PC[letter] + 18) % 12) - 6;      // −1 бемоль, 0, +1 диез
+  return LETTERS[letter] + (shift < 0 ? '♭' : shift > 0 ? '♯' : '') + SUFFIX[QUALITY[degree]];
+}
+
+// Раскладывает такты по четыре в строке
+function rows(items, separator) {
+  const lines = [];
+  for (let i = 0; i < items.length; i += 4) lines.push(items.slice(i, i + 4).join(separator));
+  return lines.join('\n');
+}
+
+function describe(q) {
+  const bars = q.degrees.length;
+  return {
+    label: `${bars} ${bars === 1 ? 'bar' : 'bars'} × ${REPEATS}`,
+    answer: rows(q.degrees.map((degree) => NUMERALS[degree]), ' – '),
+    notes: `Key of ${KEYS[q.key].name}\n${rows(q.degrees.map((degree) => chordName(q.key, degree)), '  ')}`,
+    voice: q.degrees.map((degree) => degree + 1),      // записи 1…7 — номера ступеней
+  };
+}
+</script>
+</body>
+</html>
