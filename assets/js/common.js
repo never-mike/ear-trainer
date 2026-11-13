@@ -7,7 +7,8 @@
 //   pickQuestion()  — возвращает объект-вопрос (любой формы, движок в него не заглядывает)
 //   play(q, t, beat, pass) — планирует одно звучание вопроса с момента t (через EarTrainer.playNote),
 //                     beat — длительность доли в секундах; возвращает длину звучания в секундах.
-//                     Повторы вопроса (поле #repeats) делает движок, вызывая play несколько раз;
+//                     Повторы вопроса (поле #repeats) делает движок, вызывая play по одному разу
+//                     перед каждым звучанием;
 //                     pass = { replay, repeat }: replay — это повтор после ответа,
 //                     repeat — номер звучания подряд, начиная с 0
 //   describe(q)     — { label, answer, notes, voice }: подпись в статусе, текст ответа,
@@ -34,7 +35,7 @@ window.EarTrainer = (() => {
   const LOW = 40;            // E2 — нижняя граница: диапазон выбран так, чтобы ноты можно было пропеть
   const HIGH = 76;           // E5 — верхняя граница
   const DEFAULT_BPM = 80;    // темп по умолчанию, размер 4/4
-  const MIN_BPM = 30;
+  const MIN_BPM = 30;        // границы и значение по умолчанию полей Tempo и Repeats — атрибуты разметки (buildPage)
   const MAX_BPM = 240;
   const DEFAULT_REPEATS = 4; // сколько раз подряд звучит вопрос, если тренировка не задала своё значение
   const BAR_BEATS = 4;       // долей в такте (размер 4/4); паузы на раздумье и после ответа — целый такт
@@ -242,13 +243,17 @@ window.EarTrainer = (() => {
     const load = (key) => { try { return localStorage.getItem(prefix + key); } catch (e) { return null; } };
     const save = (key, value) => { try { localStorage.setItem(prefix + key, value); } catch (e) {} };
 
-    // Восстанавливает значение поля, списка или флажка и сохраняет его при изменении
+    // Восстанавливает значение поля, списка или флажка и сохраняет его при изменении.
+    // Возвращает функцию чтения текущего значения: у флажка — true/false, у списка — строка,
+    // у числового поля — число. Числовое поле читать нужно только через неё, а не через el.value:
+    // она отдаёт последнее завершённое значение, а не то, что набрано в поле наполовину
+    // (иначе, пока вместо «80» набирают «120», тренировка успела бы взять темп «1»)
     function persist(el, key) {
       const saved = load(key);
       if (el.type === 'checkbox') {
         if (saved !== null) el.checked = saved === '1';
         el.addEventListener('change', () => save(key, el.checked ? '1' : '0'));
-        return;
+        return () => el.checked;
       }
       if (saved !== null && saved !== '') {
         el.value = saved;
@@ -257,16 +262,24 @@ window.EarTrainer = (() => {
           el.selectedIndex = Math.max(0, [...el.options].findIndex((o) => o.defaultSelected));
         }
       }
+      if (el.type !== 'number') {
+        el.addEventListener('change', () => save(key, el.value));
+        return () => el.value;
+      }
+
       // Числовое поле приводится к целому в пределах min…max (пустое и нечисло — к значению
       // по умолчанию), чтобы на экране стояло то же число, с которым работает тренировка
-      const normalize = () => {
-        if (el.type !== 'number') return;
+      let value;
+      const settle = () => {
         const n = Math.round(Number(el.value));
-        if (el.value === '' || !Number.isFinite(n)) { el.value = el.defaultValue; return; }
-        el.value = Math.min(Number(el.max || n), Math.max(Number(el.min || n), n));
+        value = el.value === '' || !Number.isFinite(n)
+          ? Number(el.defaultValue)
+          : Math.min(Number(el.max || n), Math.max(Number(el.min || n), n));
+        el.value = value;
       };
-      normalize();
-      el.addEventListener('change', () => { normalize(); save(key, el.value); });
+      settle();
+      el.addEventListener('change', () => { settle(); save(key, el.value); });
+      return () => value;
     }
 
     // Сетка кнопок-переключателей. items: [{ id, label, title, off }]; off — выключен по умолчанию.
@@ -305,15 +318,12 @@ window.EarTrainer = (() => {
       return enabled;
     }
 
-    persist(bpmEl, 'bpm');
-    persist(repeatsEl, 'repeats');
-    persist(replayEl, 'replay');
+    const bpm = persist(bpmEl, 'bpm');
+    const repeatCount = persist(repeatsEl, 'repeats');     // сколько раз подряд звучит вопрос
+    const replay = persist(replayEl, 'replay');
 
-    // Длительность одной доли в секундах по текущему темпу из поля ввода
-    function beatSec() {
-      const bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, Number(bpmEl.value) || DEFAULT_BPM));
-      return 60 / bpm;
-    }
+    // Длительность одной доли в секундах по текущему темпу
+    const beatSec = () => 60 / bpm();
 
     // ---------- Голос ----------
     // Записи лежат в window.VOICE_DATA как { фраза: base64 (m4a) }. Встроены в скрипт, а не грузятся
@@ -369,21 +379,6 @@ window.EarTrainer = (() => {
     // ---------- Цикл ----------
     let runId = 0;        // меняется при каждом старте/стопе — так отменяется текущий цикл
 
-    // Сколько раз подряд звучит вопрос; значение по умолчанию у каждой тренировки своё —
-    // параметр repeats, он же атрибут value (defaultValue) поля #repeats
-    function repeatCount() {
-      const n = Math.round(Number(repeatsEl.value)) || Number(repeatsEl.defaultValue) || 1;
-      return Math.min(MAX_REPEATS, Math.max(1, n));
-    }
-
-    // Планирует вопрос с момента start times раз подряд без пауз, возвращает общую длительность в секундах
-    function playQuestion(q, times, replay, start) {
-      const beat = beatSec();
-      let total = 0;
-      for (let i = 0; i < times; i++) total += trainer.play(q, start + total, beat, { replay, repeat: i });
-      return total;
-    }
-
     // Ждёт, пока аудиочасы не подойдут к моменту time (с запасом LOOKAHEAD на планирование).
     // Ожидание привязано к ctx.currentTime, а не к таймеру: если iOS приостановила контекст,
     // аудиочасы стоят — и цикл стоит вместе с ними, а не планирует звуки в одну точку.
@@ -434,6 +429,24 @@ window.EarTrainer = (() => {
 
       let count = 0;
       let at = 0;           // момент на аудиочасах, с которого начинается очередная фаза цикла
+
+      // Планирует одно звучание вопроса с момента at и ждёт его конца. Звучания планируются
+      // по одному, а не все повторы разом: иначе длинный вопрос (16 тактов × 8 повторов) —
+      // это тысячи узлов Web Audio, созданных заранее, а смена темпа и числа повторов
+      // не действовала бы до следующего вопроса. Возвращает false, если запуск отменён
+      const playOnce = async (q, pass) => {
+        at = notBefore(at);
+        at += trainer.play(q, at, beatSec(), pass);
+        await waitUntil(at, my);
+        return my === runId;
+      };
+      // Такт паузы; возвращает false, если запуск отменён
+      const rest = async () => {
+        at += BAR_BEATS * beatSec();
+        await waitUntil(at, my);
+        return my === runId;
+      };
+
       while (my === runId) {
         const q = trainer.pickQuestion();
         const info = trainer.describe(q);
@@ -442,10 +455,12 @@ window.EarTrainer = (() => {
         statusEl.textContent = info.label ? `#${count} · ${info.label}` : `#${count}`;
         answerEl.textContent = '?';
         notesEl.textContent = '';
-        at = notBefore(at);
-        at += playQuestion(q, repeatCount(), false, at) + BAR_BEATS * beatSec();
-        await waitUntil(at, my);
-        if (my !== runId) break;
+        // Вопрос — подряд без пауз; число повторов читается перед каждым, так что его смена
+        // действует уже на текущем вопросе. Затем такт на раздумье
+        for (let i = 0; i < repeatCount(); i++) {
+          if (!await playOnce(q, { replay: false, repeat: i })) return;
+        }
+        if (!await rest()) return;
 
         // Ответ: текст на экране + голос (на голос отводится такт)
         answerEl.textContent = info.answer;
@@ -455,18 +470,16 @@ window.EarTrainer = (() => {
         if (spoken) {
           at += Math.max(BAR_BEATS * beatSec(), spoken + 0.2);
           await waitUntil(at, my);
-          if (my !== runId) break;
+          if (my !== runId) return;
         }
 
-        if (replayEl.checked) {
+        if (replay()) {
           // Повтор вопроса (один раз), чтобы услышать его, уже зная ответ, и пауза в такт
-          at = notBefore(at);
-          at += playQuestion(q, 1, true, at) + BAR_BEATS * beatSec();
-          await waitUntil(at, my);
+          if (!await playOnce(q, { replay: true, repeat: 0 })) return;
+          if (!await rest()) return;
         } else if (!spoken) {
           // Без повтора и без голоса — такт тишины, чтобы успеть прочитать ответ
-          at += BAR_BEATS * beatSec();
-          await waitUntil(at, my);
+          if (!await rest()) return;
         }
       }
     }

@@ -46,9 +46,6 @@
 const ET = EarTrainer;
 
 const BAR_BEATS = ET.BAR_BEATS;      // размер 4/4
-const MIN_BARS = 1;
-const MAX_BARS = 16;
-const DEFAULT_BARS = 4;
 const BASS_LOW = 40;         // E2: бас лежит в октаве E2…D♯3, верхние голоса — октавой выше
 const UPPER_LEVEL = 0.5;     // громкость каждой ноты трезвучия
 const BASS_LEVEL = 0.8;      // громкость баса
@@ -104,16 +101,11 @@ const sameEl = document.getElementById('same');
 const trainer = ET.create({ id: 'progressions', pickQuestion, play, describe, onStart, phrases: SAY });
 ET.fillKeys(keyEl);        // до persist, иначе сохранённая тональность не восстановится
 trainer.persist(keyEl, 'key');
-trainer.persist(barsEl, 'bars');
+const barCount = trainer.persist(barsEl, 'bars');     // число тактов; границы и умолчание — в разметке поля
 trainer.persist(sourceEl, 'source');
 trainer.persist(sameEl, 'same');
 
 // ---------- Генерация последовательности ----------
-
-function barCount() {
-  const n = Math.round(Number(barsEl.value)) || DEFAULT_BARS;
-  return Math.min(MAX_BARS, Math.max(MIN_BARS, n));
-}
 
 // Случайная последовательность: ступени по весам, без одинаковых аккордов в соседних тактах
 function randomProgression(bars) {

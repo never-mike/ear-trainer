@@ -28,7 +28,7 @@ A chord is played and you name its quality.
 
 - 33 chord types: triads, seventh chords, sixths, added-tone, altered and extended chords. The first 12 (triads and seventh chords) are enabled by default.
 - Mode: block chord, arpeggio or mixed.
-- Inversion: root position, 1st, 2nd, 3rd or random. With random inversions the voice also names the inversion. Chords that sound identical to another enabled chord in some inversion (for example, sus2 in 2nd inversion and sus4 in root position) are then played in root position only, so every question has one answer.
+- Inversion: root position, 1st, 2nd, 3rd or random. Chords with added or omitted tones (5, 6/9, add9, add11, 11) are always played in root position. With random inversions the voice also names the inversion. Chords that sound identical to another enabled chord in some inversion (for example, sus2 in 2nd inversion and sus4 in root position) are then played in root position only, so every question has one answer.
 
 ### Progressions
 
@@ -48,7 +48,7 @@ Every trainer has:
 - **Repeats** (1–8): how many times in a row the question is played before the pause. The default is 4, and 1 for scale degrees.
 - **Replay after answer**: plays the question once more after the answer.
 
-All settings can be changed while the trainer is running and are remembered per trainer in the browser.
+All settings can be changed while the trainer is running; a change takes effect from the next repetition or the next question. Settings are remembered per trainer in the browser.
 
 Notes stay between E2 and E5, a range chosen so that you can sing along with what you hear.
 

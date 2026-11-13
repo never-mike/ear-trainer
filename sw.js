@@ -46,7 +46,8 @@ self.addEventListener('fetch', (event) => {
     const cache = await caches.open(CACHE);
     try {
       const response = await fetch(request);
-      if (response.ok) cache.put(request, response.clone());
+      // waitUntil — чтобы запись крупного файла (голос) не оборвалась вместе с воркером
+      if (response.ok) event.waitUntil(cache.put(request, response.clone()));
       return response;
     } catch (e) {
       const cached = await cache.match(request, { ignoreSearch: true });
