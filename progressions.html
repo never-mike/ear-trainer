@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111418">
 <title>Progressions · Ear Trainer</title>
 <link rel="stylesheet" href="assets/css/common.css">
 <style>
@@ -13,31 +15,12 @@
 </style>
 </head>
 <body>
-  <a class="back" href="index.html">‹ Trainers</a>
-
-  <div class="screen">
-    <div id="status">Press Start</div>
-    <div id="answer"></div>
-    <div id="notes"></div>
-    <div id="diag"></div>
-  </div>
-
+  <!-- Только настройки этой тренировки. Остальное — ссылку «назад», экран с ответом, поля
+       Tempo/Repeats/Replay и кнопки Start/Stop — достраивает движок (EarTrainer.create) -->
   <div class="controls">
     <label>Key
       <select id="key">
         <option value="random" selected>Random</option>
-        <option value="0">C</option>
-        <option value="1">D♭</option>
-        <option value="2">D</option>
-        <option value="3">E♭</option>
-        <option value="4">E</option>
-        <option value="5">F</option>
-        <option value="6">F♯</option>
-        <option value="7">G</option>
-        <option value="8">A♭</option>
-        <option value="9">A</option>
-        <option value="10">B♭</option>
-        <option value="11">B</option>
       </select>
     </label>
     <label>Bars
@@ -53,19 +36,6 @@
     <label>Keep the same progression
       <input id="same" type="checkbox">
     </label>
-    <label>Tempo, bpm
-      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
-    </label>
-    <label>Repeats
-      <input id="repeats" type="number" inputmode="numeric" min="1" max="8" step="1" value="4">
-    </label>
-    <label>Replay after answer
-      <input id="replay" type="checkbox" checked>
-    </label>
-    <div class="buttons">
-      <button id="start">Start</button>
-      <button id="stop" disabled>Stop</button>
-    </div>
   </div>
 
 <script src="assets/voice/progressions.js"></script>
@@ -75,10 +45,7 @@
 // Аккорды — ступени мажорного лада (I ii iii IV V vi vii°), по одному на такт, размер 4/4.
 const ET = EarTrainer;
 
-const BAR_BEATS = 4;         // размер 4/4
-const MIN_BARS = 1;
-const MAX_BARS = 16;
-const DEFAULT_BARS = 4;
+const BAR_BEATS = ET.BAR_BEATS;      // размер 4/4
 const BASS_LOW = 40;         // E2: бас лежит в октаве E2…D♯3, верхние голоса — октавой выше
 const UPPER_LEVEL = 0.5;     // громкость каждой ноты трезвучия
 const BASS_LEVEL = 0.8;      // громкость баса
@@ -88,19 +55,12 @@ const RING_EIGHTHS = 2;      // каждая восьмая звучит две 
 const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];              // полутоны от тоники
 const QUALITY = ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'];
 const NUMERALS = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+// Фразы для голоса; такие же должны быть в make-voice.sh (ветка progressions)
+const SAY = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'];
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };   // всегда в основном виде
 const SUFFIX = { maj: '', min: 'm', dim: '°' };
 
-// Тональности: letter — индекс буквы тоники в LETTERS (нужен для правильной записи ♯/♭ в названиях
-// аккордов), pc — высотный класс тоники. Порядок совпадает со значениями <select id="key">.
-const LETTERS = 'CDEFGAB';
-const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
-const KEYS = [
-  { name: 'C', letter: 0, pc: 0 },   { name: 'D♭', letter: 1, pc: 1 },  { name: 'D', letter: 1, pc: 2 },
-  { name: 'E♭', letter: 2, pc: 3 },  { name: 'E', letter: 2, pc: 4 },   { name: 'F', letter: 3, pc: 5 },
-  { name: 'F♯', letter: 3, pc: 6 },  { name: 'G', letter: 4, pc: 7 },   { name: 'A♭', letter: 5, pc: 8 },
-  { name: 'A', letter: 5, pc: 9 },   { name: 'B♭', letter: 6, pc: 10 }, { name: 'B', letter: 6, pc: 11 },
-];
+const KEYS = ET.KEYS;      // тональности — общие для всех тренировок, см. common.js
 
 // Общепринятые последовательности; числа — ступени 1…7
 const COMMON = [
@@ -138,18 +98,14 @@ const barsEl = document.getElementById('bars');
 const sourceEl = document.getElementById('source');
 const sameEl = document.getElementById('same');
 
-const trainer = ET.create({ id: 'progressions', pickQuestion, play, describe, onStart });
+const trainer = ET.create({ id: 'progressions', pickQuestion, play, describe, onStart, phrases: SAY });
+ET.fillKeys(keyEl);        // до persist, иначе сохранённая тональность не восстановится
 trainer.persist(keyEl, 'key');
-trainer.persist(barsEl, 'bars');
+const barCount = trainer.persist(barsEl, 'bars');     // число тактов; границы и умолчание — в разметке поля
 trainer.persist(sourceEl, 'source');
 trainer.persist(sameEl, 'same');
 
 // ---------- Генерация последовательности ----------
-
-function barCount() {
-  const n = Math.round(Number(barsEl.value)) || DEFAULT_BARS;
-  return Math.min(MAX_BARS, Math.max(MIN_BARS, n));
-}
 
 // Случайная последовательность: ступени по весам, без одинаковых аккордов в соседних тактах
 function randomProgression(bars) {
@@ -169,7 +125,7 @@ function randomProgression(bars) {
 // (для длин больше четырёх тактов — через раз), иначе склеиваем из более коротких.
 function commonProgression(bars) {
   const exact = COMMON.filter((p) => p.length === bars);
-  if (exact.length && (bars <= 4 || ET.rand(2) === 0)) return exact[ET.rand(exact.length)];
+  if (exact.length && (bars <= 4 || ET.rand(2) === 0)) return ET.pick(exact);
 
   const result = [];
   while (result.length < bars) {
@@ -179,14 +135,13 @@ function commonProgression(bars) {
     // Пока места хватает — любые куски от четырёх тактов; в хвост — самый длинный из подходящих
     const size = Math.min(4, Math.max(...fitting.map((p) => p.length)));
     const pool = fitting.filter((p) => (size === 4 ? p.length >= 4 : p.length === size));
-    result.push(...pool[ET.rand(pool.length)]);
+    result.push(...ET.pick(pool));
   }
   return result;
 }
 
 function generate(bars) {
-  const source = sourceEl.value;
-  const random = source === 'random' || (source === 'mixed' && ET.rand(2) === 0);
+  const random = ET.modeIs(sourceEl.value, 'random');
   return random ? randomProgression(bars) : commonProgression(bars);
 }
 
@@ -212,15 +167,13 @@ function pickQuestion() {
   }
 
   let key = Number(keyEl.value);
-  if (keyEl.value === 'random' || !KEYS[key]) {
-    do { key = ET.rand(KEYS.length); } while (key === lastKey);
-  }
+  if (keyEl.value === 'random' || !KEYS[key]) key = ET.randExcept(KEYS.length, lastKey);
   lastKey = key;
 
   // Аккорды всегда в основном виде: бас — основной тон в октаве E2…D♯3, трезвучие — октавой выше
   const chords = degrees.map((degree) => {
     const rootPc = (KEYS[key].pc + MAJOR_SCALE[degree]) % 12;
-    const bass = BASS_LOW + ((rootPc - BASS_LOW) % 12 + 12) % 12;
+    const bass = ET.atOrAbove(rootPc, BASS_LOW);
     return { bass, upper: TRIAD[QUALITY[degree]].map((step) => bass + 12 + step) };
   });
 
@@ -248,10 +201,7 @@ function play(q, t, beat) {
 
 // Название аккорда на ступени: буква берётся по гамме, знак — по разнице с высотой этой буквы
 function chordName(key, degree) {
-  const letter = (KEYS[key].letter + degree) % 7;
-  const pc = (KEYS[key].pc + MAJOR_SCALE[degree]) % 12;
-  const shift = ((pc - LETTER_PC[letter] + 18) % 12) - 6;      // −1 бемоль, 0, +1 диез
-  return LETTERS[letter] + (shift < 0 ? '♭' : shift > 0 ? '♯' : '') + SUFFIX[QUALITY[degree]];
+  return ET.spell(KEYS[key].letter + degree, KEYS[key].pc + MAJOR_SCALE[degree]) + SUFFIX[QUALITY[degree]];
 }
 
 // Раскладывает такты по четыре в строке
@@ -267,7 +217,7 @@ function describe(q) {
     label: `${bars} ${bars === 1 ? 'bar' : 'bars'}`,
     answer: rows(q.degrees.map((degree) => NUMERALS[degree]), ' – '),
     notes: `Key of ${KEYS[q.key].name}\n${rows(q.degrees.map((degree) => chordName(q.key, degree)), '  ')}`,
-    voice: q.degrees.map((degree) => degree + 1),      // записи 1…7 — номера ступеней
+    voice: q.degrees.map((degree) => SAY[degree]),      // номера ступеней подряд
   };
 }
 </script>

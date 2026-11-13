@@ -4,51 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111418">
 <title>Scale degrees · Ear Trainer</title>
 <link rel="stylesheet" href="assets/css/common.css">
 </head>
 <body>
-  <a class="back" href="index.html">‹ Trainers</a>
-
-  <div class="screen">
-    <div id="status">Press Start</div>
-    <div id="answer"></div>
-    <div id="notes"></div>
-    <div id="diag"></div>
-  </div>
-
+  <!-- Только настройки этой тренировки. Остальное — ссылку «назад», экран с ответом, поля
+       Tempo/Repeats/Replay и кнопки Start/Stop — достраивает движок (EarTrainer.create) -->
   <div class="controls">
     <div id="degrees" class="toggles" role="group" aria-label="Scale degrees"></div>
     <label>Key
       <select id="key">
         <option value="random" selected>Random</option>
-        <option value="0">C</option>
-        <option value="1">D♭</option>
-        <option value="2">D</option>
-        <option value="3">E♭</option>
-        <option value="4">E</option>
-        <option value="5">F</option>
-        <option value="6">F♯</option>
-        <option value="7">G</option>
-        <option value="8">A♭</option>
-        <option value="9">A</option>
-        <option value="10">B♭</option>
-        <option value="11">B</option>
       </select>
     </label>
-    <label>Tempo, bpm
-      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
-    </label>
-    <label>Repeats
-      <input id="repeats" type="number" inputmode="numeric" min="1" max="8" step="1" value="1">
-    </label>
-    <label>Replay after answer
-      <input id="replay" type="checkbox" checked>
-    </label>
-    <div class="buttons">
-      <button id="start">Start</button>
-      <button id="stop" disabled>Stop</button>
-    </div>
   </div>
 
 <script src="assets/voice/degrees.js"></script>
@@ -59,36 +29,34 @@
 // и нужно назвать её ступень (все 12 хроматических). Вопрос: такт одного дрона, затем такт с нотой.
 const ET = EarTrainer;
 
-const BAR_BEATS = 4;            // такт 4/4: столько длится и вступление дрона, и нота
+const BAR_BEATS = ET.BAR_BEATS;        // такт 4/4: столько длится и вступление дрона, и нота
 const QUESTIONS_PER_KEY = 8;    // при случайной тональности дрон меняет её через столько вопросов
 const DRONE_LOW = 40;           // E2: нижняя тоника дрона лежит в октаве E2…D♯3, верхняя — октавой выше
 const DRONE_LEVEL = 0.35;       // громкость каждой из двух нот дрона
 const NOTE_LEVEL = 0.8;         // громкость ноты-вопроса
 
-// Индекс = полутон от тоники (0…11); запись голоса — индекс + 1, тот же порядок в make-voice.sh.
-// letter — на сколько букв ступень отстоит от тоники (нужно для записи ноты с правильным знаком).
+// Индекс = полутон от тоники (0…11).
+// letter — на сколько букв ступень отстоит от тоники (нужно для записи ноты с правильным знаком);
+// say — фраза для голоса: такие же должны быть в make-voice.sh (ветка degrees), иначе запись не найдётся.
 const DEGREES = [
-  { name: '1',  letter: 0 }, { name: '♭2', letter: 1 }, { name: '2',  letter: 1 },
-  { name: '♭3', letter: 2 }, { name: '3',  letter: 2 }, { name: '4',  letter: 3 },
-  { name: '♯4', letter: 3 }, { name: '5',  letter: 4 }, { name: '♭6', letter: 5 },
-  { name: '6',  letter: 5 }, { name: '♭7', letter: 6 }, { name: '7',  letter: 6 },
+  { name: '1',  letter: 0, say: 'One' },        { name: '♭2', letter: 1, say: 'Flat two' },
+  { name: '2',  letter: 1, say: 'Two' },        { name: '♭3', letter: 2, say: 'Flat three' },
+  { name: '3',  letter: 2, say: 'Three' },      { name: '4',  letter: 3, say: 'Four' },
+  { name: '♯4', letter: 3, say: 'Sharp four' }, { name: '5',  letter: 4, say: 'Five' },
+  { name: '♭6', letter: 5, say: 'Flat six' },   { name: '6',  letter: 5, say: 'Six' },
+  { name: '♭7', letter: 6, say: 'Flat seven' }, { name: '7',  letter: 6, say: 'Seven' },
 ];
 
-// Тональности: letter — индекс буквы тоники в LETTERS, pc — высотный класс тоники.
-// Порядок совпадает со значениями <select id="key">.
-const LETTERS = 'CDEFGAB';
-const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
-const ACCIDENTALS = { '-2': '♭♭', '-1': '♭', 0: '', 1: '♯', 2: '♯♯' };
-const KEYS = [
-  { name: 'C', letter: 0, pc: 0 },   { name: 'D♭', letter: 1, pc: 1 },  { name: 'D', letter: 1, pc: 2 },
-  { name: 'E♭', letter: 2, pc: 3 },  { name: 'E', letter: 2, pc: 4 },   { name: 'F', letter: 3, pc: 5 },
-  { name: 'F♯', letter: 3, pc: 6 },  { name: 'G', letter: 4, pc: 7 },   { name: 'A♭', letter: 5, pc: 8 },
-  { name: 'A', letter: 5, pc: 9 },   { name: 'B♭', letter: 6, pc: 10 }, { name: 'B', letter: 6, pc: 11 },
-];
+const KEYS = ET.KEYS;      // тональности — общие для всех тренировок, см. common.js
 
 const keyEl = document.getElementById('key');
 
-const trainer = ET.create({ id: 'degrees', pickQuestion, play, describe, onStart });
+const trainer = ET.create({
+  id: 'degrees', pickQuestion, play, describe, onStart,
+  repeats: 1,      // вопрос звучит один раз: дрон и так не замолкает
+  phrases: DEGREES.map((degree) => degree.say),
+});
+ET.fillKeys(keyEl);        // до persist, иначе сохранённая тональность не восстановится
 trainer.persist(keyEl, 'key');
 
 // Полутоны от тоники, которые участвуют в тренировке
@@ -121,24 +89,22 @@ function pickQuestion() {
     if (key !== fixed) asked = 0;
     key = fixed;
   } else if (key < 0 || asked >= QUESTIONS_PER_KEY) {
-    let next;
-    do { next = ET.rand(KEYS.length); } while (next === key);
-    key = next;
+    key = ET.randExcept(KEYS.length, key);
     asked = 0;
   }
   asked++;
 
   const pool = [...enabled];       // только выбранные ступени
   let degree;
-  do { degree = pool[ET.rand(pool.length)]; } while (pool.length > 1 && degree === lastDegree);
+  do { degree = ET.pick(pool); } while (pool.length > 1 && degree === lastDegree);
   lastDegree = degree;
 
-  const low = DRONE_LOW + ((KEYS[key].pc - DRONE_LOW) % 12 + 12) % 12;   // нижняя тоника дрона
-  const high = low + 12;                                                  // верхняя тоника дрона
+  const low = ET.atOrAbove(KEYS[key].pc, DRONE_LOW);     // нижняя тоника дрона
+  const high = low + 12;                                  // верхняя тоника дрона
   // Нота — в одной из двух октав над верхней тоникой дрона, в пределах диапазона;
   // с самой тоникой дрона не совпадает, иначе её не было бы слышно отдельно
   const candidates = [high + degree, high + 12 + degree].filter((n) => n <= ET.HIGH && n !== high);
-  const note = candidates[ET.rand(candidates.length)];
+  const note = ET.pick(candidates);
 
   return { key, asked, random: fixed < 0, degree, low, note };
 }
@@ -163,10 +129,7 @@ function play(q, t, beat, pass) {
 
 // Название ноты на ступени: буква берётся по ступени, знак — по разнице с высотой этой буквы
 function noteName(keyIndex, degree) {
-  const letter = (KEYS[keyIndex].letter + DEGREES[degree].letter) % 7;
-  const pc = (KEYS[keyIndex].pc + degree) % 12;
-  const shift = ((pc - LETTER_PC[letter] + 18) % 12) - 6;
-  return LETTERS[letter] + ACCIDENTALS[shift];
+  return ET.spell(KEYS[keyIndex].letter + DEGREES[degree].letter, KEYS[keyIndex].pc + degree);
 }
 
 function describe(q) {
@@ -175,7 +138,7 @@ function describe(q) {
     label: q.random ? `drone ${q.asked}/${QUESTIONS_PER_KEY}` : '',
     answer: DEGREES[q.degree].name,
     notes: `${noteName(q.key, q.degree)} over ${KEYS[q.key].name}`,
-    voice: q.degree + 1,
+    voice: DEGREES[q.degree].say,
   };
 }
 </script>
