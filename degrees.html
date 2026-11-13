@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Scale degrees · Ear Trainer</title>
+<link rel="stylesheet" href="assets/css/common.css">
+</head>
+<body>
+  <a class="back" href="index.html">‹ Trainers</a>
+
+  <div class="screen">
+    <div id="status">Press Start</div>
+    <div id="answer"></div>
+    <div id="notes"></div>
+    <div id="diag"></div>
+  </div>
+
+  <div class="controls">
+    <div id="degrees" class="toggles" role="group" aria-label="Scale degrees"></div>
+    <label>Key
+      <select id="key">
+        <option value="random" selected>Random</option>
+        <option value="0">C</option>
+        <option value="1">D♭</option>
+        <option value="2">D</option>
+        <option value="3">E♭</option>
+        <option value="4">E</option>
+        <option value="5">F</option>
+        <option value="6">F♯</option>
+        <option value="7">G</option>
+        <option value="8">A♭</option>
+        <option value="9">A</option>
+        <option value="10">B♭</option>
+        <option value="11">B</option>
+      </select>
+    </label>
+    <label>Tempo, bpm
+      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
+    </label>
+    <label>Repeats
+      <input id="repeats" type="number" inputmode="numeric" min="1" max="8" step="1" value="1">
+    </label>
+    <label>Replay after answer
+      <input id="replay" type="checkbox" checked>
+    </label>
+    <div class="buttons">
+      <button id="start">Start</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+  </div>
+
+<script src="assets/voice/degrees.js"></script>
+<script src="assets/js/common.js"></script>
+<script>
+// Тренировка ступеней лада на фоне дрона. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
+// Дрон — тоника в двух соседних октавах — звучит непрерывно; на его фоне появляется нота,
+// и нужно назвать её ступень (все 12 хроматических). Вопрос: такт одного дрона, затем такт с нотой.
+const ET = EarTrainer;
+
+const BAR_BEATS = 4;            // такт 4/4: столько длится и вступление дрона, и нота
+const QUESTIONS_PER_KEY = 8;    // при случайной тональности дрон меняет её через столько вопросов
+const DRONE_LOW = 40;           // E2: нижняя тоника дрона лежит в октаве E2…D♯3, верхняя — октавой выше
+const DRONE_LEVEL = 0.35;       // громкость каждой из двух нот дрона
+const NOTE_LEVEL = 0.8;         // громкость ноты-вопроса
+
+// Индекс = полутон от тоники (0…11); запись голоса — индекс + 1, тот же порядок в make-voice.sh.
+// letter — на сколько букв ступень отстоит от тоники (нужно для записи ноты с правильным знаком).
+const DEGREES = [
+  { name: '1',  letter: 0 }, { name: '♭2', letter: 1 }, { name: '2',  letter: 1 },
+  { name: '♭3', letter: 2 }, { name: '3',  letter: 2 }, { name: '4',  letter: 3 },
+  { name: '♯4', letter: 3 }, { name: '5',  letter: 4 }, { name: '♭6', letter: 5 },
+  { name: '6',  letter: 5 }, { name: '♭7', letter: 6 }, { name: '7',  letter: 6 },
+];
+
+// Тональности: letter — индекс буквы тоники в LETTERS, pc — высотный класс тоники.
+// Порядок совпадает со значениями <select id="key">.
+const LETTERS = 'CDEFGAB';
+const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
+const ACCIDENTALS = { '-2': '♭♭', '-1': '♭', 0: '', 1: '♯', 2: '♯♯' };
+const KEYS = [
+  { name: 'C', letter: 0, pc: 0 },   { name: 'D♭', letter: 1, pc: 1 },  { name: 'D', letter: 1, pc: 2 },
+  { name: 'E♭', letter: 2, pc: 3 },  { name: 'E', letter: 2, pc: 4 },   { name: 'F', letter: 3, pc: 5 },
+  { name: 'F♯', letter: 3, pc: 6 },  { name: 'G', letter: 4, pc: 7 },   { name: 'A♭', letter: 5, pc: 8 },
+  { name: 'A', letter: 5, pc: 9 },   { name: 'B♭', letter: 6, pc: 10 }, { name: 'B', letter: 6, pc: 11 },
+];
+
+const keyEl = document.getElementById('key');
+
+const trainer = ET.create({ id: 'degrees', pickQuestion, play, describe, onStart });
+trainer.persist(keyEl, 'key');
+
+// Полутоны от тоники, которые участвуют в тренировке
+const enabled = trainer.toggleGroup(
+  document.getElementById('degrees'),
+  DEGREES.map((degree, i) => ({ id: i, label: degree.name, title: degree.name })),
+  'degrees',
+);
+
+// ---------- Состояние между вопросами ----------
+let key = -1;             // текущая тональность (индекс в KEYS), −1 — ещё не выбрана
+let asked = 0;            // сколько вопросов уже задано в этой тональности
+let lastDegree = -1;      // чтобы одна и та же ступень не выпадала дважды подряд
+let drone = [];           // звучащие тоны дрона (результаты ET.startTone)
+let droneKey = -1;        // тональность, в которой дрон сейчас звучит
+
+// «Stop» глушит все звуки, включая дрон, поэтому каждый Start начинает с чистого состояния
+function onStart() {
+  key = -1;
+  asked = 0;
+  lastDegree = -1;
+  drone = [];
+  droneKey = -1;
+}
+
+function pickQuestion() {
+  const fixed = KEYS[Number(keyEl.value)] ? Number(keyEl.value) : -1;   // −1 — тональность случайная
+  if (fixed >= 0) {
+    // Выбранная тональность: дрон не меняется, пока её не сменят в настройках
+    if (key !== fixed) asked = 0;
+    key = fixed;
+  } else if (key < 0 || asked >= QUESTIONS_PER_KEY) {
+    let next;
+    do { next = ET.rand(KEYS.length); } while (next === key);
+    key = next;
+    asked = 0;
+  }
+  asked++;
+
+  const pool = [...enabled];       // только выбранные ступени
+  let degree;
+  do { degree = pool[ET.rand(pool.length)]; } while (pool.length > 1 && degree === lastDegree);
+  lastDegree = degree;
+
+  const low = DRONE_LOW + ((KEYS[key].pc - DRONE_LOW) % 12 + 12) % 12;   // нижняя тоника дрона
+  const high = low + 12;                                                  // верхняя тоника дрона
+  // Нота — в одной из двух октав над верхней тоникой дрона, в пределах диапазона;
+  // с самой тоникой дрона не совпадает, иначе её не было бы слышно отдельно
+  const candidates = [high + degree, high + 12 + degree].filter((n) => n <= ET.HIGH && n !== high);
+  const note = candidates[ET.rand(candidates.length)];
+
+  return { key, asked, random: fixed < 0, degree, low, note };
+}
+
+// Первое звучание вопроса: такт одного дрона, затем такт с нотой. Повторные звучания
+// (поле Repeats) и повтор после ответа — только такт с нотой; дрон при этом продолжает звучать.
+function play(q, t, beat, pass) {
+  const bar = BAR_BEATS * beat;
+  let at = t;
+  if (!pass.replay && pass.repeat === 0) {
+    if (droneKey !== q.key) {
+      // Новая тональность: прежний дрон затухает, новый вступает
+      for (const tone of drone) tone.stop(t);
+      drone = [q.low, q.low + 12].map((midi) => ET.startTone(midi, t, DRONE_LEVEL));
+      droneKey = q.key;
+    }
+    at += bar;
+  }
+  ET.playNote(q.note, at, bar, NOTE_LEVEL);
+  return at + bar - t;
+}
+
+// Название ноты на ступени: буква берётся по ступени, знак — по разнице с высотой этой буквы
+function noteName(keyIndex, degree) {
+  const letter = (KEYS[keyIndex].letter + DEGREES[degree].letter) % 7;
+  const pc = (KEYS[keyIndex].pc + degree) % 12;
+  const shift = ((pc - LETTER_PC[letter] + 18) % 12) - 6;
+  return LETTERS[letter] + ACCIDENTALS[shift];
+}
+
+function describe(q) {
+  return {
+    // Счётчик вопросов до смены дрона показываем, только когда тональность случайная
+    label: q.random ? `drone ${q.asked}/${QUESTIONS_PER_KEY}` : '',
+    answer: DEGREES[q.degree].name,
+    notes: `${noteName(q.key, q.degree)} over ${KEYS[q.key].name}`,
+    voice: q.degree + 1,
+  };
+}
+</script>
+</body>
+</html>

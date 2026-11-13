@@ -32,12 +32,20 @@ A chord progression in a major key is played several times in a row (four by def
 - Optionally keep the same progression and only change the key.
 - Chords are root-position triads, played as alternating eighth notes: chord, bass, chord, bass.
 
+### Scale degrees
+
+A drone holds the tonic in two octaves. A note is played over it and you name its scale degree, out of all 12 chromatic ones (1, ♭2, 2, ♭3, 3, 4, ♯4, 5, ♭6, 6, ♭7, 7).
+
+- Choose which of the 12 degrees take part.
+- Each question goes: a bar of the drone alone, a bar with the note, a bar to think, the answer, then the note once more. The drone never stops.
+- Key: random (the drone moves to another key every 8 questions) or any fixed key.
+
 ## Common settings
 
 Every trainer has:
 
 - **Tempo** (30–240 bpm, default 80), which sets the note lengths and pauses.
-- **Repeats** (1–8): how many times in a row the question is played before the pause. The default is 4.
+- **Repeats** (1–8): how many times in a row the question is played before the pause. The default is 4, and 1 for scale degrees.
 - **Replay after answer**: plays the question once more after the answer.
  All settings can be changed while the trainer is running and are remembered per trainer in the browser.
 
@@ -56,6 +64,7 @@ index.html            menu
 intervals.html        one page per trainer: markup and trainer logic
 chords.html
 progressions.html
+degrees.html
 assets/
   css/common.css      shared styles
   js/common.js        shared engine: audio, voice, Start/Stop loop, tempo, settings
@@ -70,7 +79,7 @@ Sound is synthesized with the Web Audio API. Spoken answers are pre-recorded and
 Voice files are generated on macOS with the built-in `say` and `afconvert` tools:
 
 ```sh
-./make-voice.sh intervals          # or: chords, progressions
+./make-voice.sh intervals          # or: chords, progressions, degrees
 ./make-voice.sh chords Daniel      # with another system voice
 ```
 

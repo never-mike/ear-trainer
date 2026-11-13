@@ -2,7 +2,7 @@
 # Генерирует assets/voice/<тренировка>.js — голосовые ответы, встроенные как base64.
 # Встраивание нужно, чтобы страницы работали и при открытии файлом (file://), где fetch запрещён.
 # Использование: ./make-voice.sh <тренировка> [голос macOS]
-#   тренировка — intervals, chords или progressions (новые добавляются в case ниже)
+#   тренировка — intervals, chords, progressions или degrees (новые добавляются в case ниже)
 #   голос      — по умолчанию Samantha; список: say -v '?'
 set -e
 cd "$(dirname "$0")"
@@ -18,6 +18,13 @@ case "$TRAINER" in
       "Minor second" "Major second" "Minor third" "Major third"
       "Perfect fourth" "Tritone" "Perfect fifth" "Minor sixth"
       "Major sixth" "Minor seventh" "Major seventh" "Octave"
+    )
+    ;;
+  degrees)
+    # Индекс = полутон от тоники + 1 (1…12)
+    names=(
+      "One" "Flat two" "Two" "Flat three" "Three" "Four"
+      "Sharp four" "Five" "Flat six" "Six" "Flat seven" "Seven"
     )
     ;;
   progressions)

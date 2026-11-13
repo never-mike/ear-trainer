@@ -5,9 +5,11 @@
 // Страница тренировки вызывает EarTrainer.create({ id, pickQuestion, play, describe }), где:
 //   id              — имя тренировки; префикс ключей localStorage (ear-trainer.<id>.*)
 //   pickQuestion()  — возвращает объект-вопрос (любой формы, движок в него не заглядывает)
-//   play(q, t, beat) — планирует одно звучание вопроса с момента t (через EarTrainer.playNote),
+//   play(q, t, beat, pass) — планирует одно звучание вопроса с момента t (через EarTrainer.playNote),
 //                     beat — длительность доли в секундах; возвращает длину звучания в секундах.
-//                     Повторы вопроса (поле #repeats) делает движок, вызывая play несколько раз
+//                     Повторы вопроса (поле #repeats) делает движок, вызывая play несколько раз;
+//                     pass = { replay, repeat }: replay — это повтор после ответа,
+//                     repeat — номер звучания подряд, начиная с 0
 //   describe(q)     — { label, answer, notes, voice }: подпись в статусе, текст ответа,
 //                     строка с нотами и индекс записи в window.VOICE_DATA
 //                     (или массив индексов — записи прозвучат подряд)
@@ -22,6 +24,7 @@ window.EarTrainer = (() => {
   const BAR_BEATS = 4;       // паузы (на раздумье и после ответа) — целый такт
   const MAX_REPEATS = 8;     // верхняя граница поля «Repeats»
   const VOLUME = 0.3;
+  const TONE_FADE = 0.3;     // время появления и затухания тянущегося тона (дрона), с
   const VOICE_GAIN = 2.5;    // громкость голоса относительно нот
   const VOICE_GAP = 0.15;    // пауза между записями, если ответ состоит из нескольких, с
 
@@ -67,6 +70,30 @@ window.EarTrainer = (() => {
     osc.stop(time + dur + 0.05);
     voices.add(osc);
     osc.onended = () => { voices.delete(osc); gain.disconnect(); };
+  }
+
+  // Запускает тянущийся тон (дрон) с момента time; звучит, пока не вызван stop(at) у результата
+  // или не нажат «Stop». Вызывается из play() тренировки во время работы цикла.
+  function startTone(midi, time, level = 1) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.setPeriodicWave(wave);
+    osc.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+
+    // Плавное появление и исчезновение, чтобы смена дрона не щёлкала
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(level, time + TONE_FADE);
+
+    osc.connect(gain).connect(runGain);
+    osc.start(time);
+    voices.add(osc);
+    osc.onended = () => { voices.delete(osc); gain.disconnect(); };
+    return {
+      stop(at) {
+        gain.gain.setTargetAtTime(0, at, TONE_FADE / 3);
+        osc.stop(at + TONE_FADE * 2);
+      },
+    };
   }
 
   function create(trainer) {
@@ -209,11 +236,11 @@ window.EarTrainer = (() => {
     }
 
     // Планирует вопрос times раз подряд без пауз, возвращает общую длительность в секундах
-    function playQuestion(q, times) {
+    function playQuestion(q, times, replay) {
       const start = ctx.currentTime + 0.08;
       const beat = beatSec();
       let total = 0;
-      for (let i = 0; i < times; i++) total += trainer.play(q, start + total, beat);
+      for (let i = 0; i < times; i++) total += trainer.play(q, start + total, beat, { replay, repeat: i });
       return total;
     }
 
@@ -246,7 +273,7 @@ window.EarTrainer = (() => {
         statusEl.textContent = info.label ? `#${count} · ${info.label}` : `#${count}`;
         answerEl.textContent = '?';
         notesEl.textContent = '';
-        let len = playQuestion(q, repeatCount());
+        let len = playQuestion(q, repeatCount(), false);
         await sleep(len + BAR_BEATS * beatSec());
         if (my !== runId) break;
 
@@ -261,7 +288,7 @@ window.EarTrainer = (() => {
 
         if (replayEl.checked) {
           // Повтор вопроса (один раз), чтобы услышать его, уже зная ответ, и пауза в такт
-          len = playQuestion(q, 1);
+          len = playQuestion(q, 1, true);
           await sleep(len + BAR_BEATS * beatSec());
         } else if (!spoken) {
           // Без повтора и без голоса — такт тишины, чтобы успеть прочитать ответ
@@ -309,5 +336,5 @@ window.EarTrainer = (() => {
     return { persist, toggleGroup };
   }
 
-  return { LOW, HIGH, rand, noteName, playNote, create };
+  return { LOW, HIGH, rand, noteName, playNote, startTone, create };
 })();
