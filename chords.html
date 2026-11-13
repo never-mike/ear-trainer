@@ -47,13 +47,13 @@ const MAX_INVERSION = 3;   // обращения выше третьего не 
 const CHORD_LOW = 48;      // C3: ниже аккорды в тесном расположении звучат неразборчиво
 const NOTES_LEVEL = 2;     // суммарная громкость нот аккорда — как у двух нот интервала
 
-// Индекс (с 1) — id вида в сохранённых настройках, поэтому новые виды добавляются в конец.
+// short — подпись на кнопке и id вида в сохранённых настройках (менять его — значит сбросить
+// у пользователя выбор этого вида); порядок в массиве — только порядок кнопок.
 // steps — полутоны от основного тона в основном виде; off — вид выключен по умолчанию;
 // say — фраза для голоса, если она отличается от name. Такие же фразы должны быть
 // в make-voice.sh (ветка chords), иначе запись не найдётся.
 // У 11, maj7♯11, 13 и m13 часть ступеней пропущена, как это принято на практике.
 const CHORDS = [
-  null,
   { name: 'Major',               short: 'maj',  steps: [0, 4, 7] },
   { name: 'Minor',               short: 'min',  steps: [0, 3, 7] },
   { name: 'Diminished',          short: 'dim',  steps: [0, 3, 6] },
@@ -118,58 +118,56 @@ function voicing(steps, inversion) {
 // Некоторые аккорды в разных обращениях звучат одинаково, и на слух их не различить:
 // sus2 во 2-м обращении — это sus4 в основном виде, 6 — обращение m7, m6 — обращение m7♭5,
 // а у симметричных aug и dim7 совпадают все обращения. SAME_SOUND собирает такие совпадения:
-// ключ — интервалы расположения от баса, значение — все пары { index, inversion } с таким звучанием
+// ключ — интервалы расположения от баса, значение — все пары { chord, inversion } с таким звучанием
 const shapeKey = (tones) => tones.map((tone) => tone.offset - tones[0].offset).join(',');
 const SAME_SOUND = {};
-CHORDS.forEach((chord, index) => {
-  if (!chord) return;
+for (const chord of CHORDS) {
   for (let inversion = 0; inversion <= maxInversionOf(chord.steps); inversion++) {
-    (SAME_SOUND[shapeKey(voicing(chord.steps, inversion))] ||= []).push({ index, inversion });
+    (SAME_SOUND[shapeKey(voicing(chord.steps, inversion))] ||= []).push({ chord, inversion });
   }
-});
+}
 
 const modeEl = document.getElementById('mode');
 const inversionEl = document.getElementById('inversion');
 
 const trainer = ET.create({
   id: 'chords', pickQuestion, play, describe,
-  phrases: [...CHORDS.slice(1).map(sayOf), ...INVERSION_SAY],
+  phrases: [...CHORDS.map(sayOf), ...INVERSION_SAY],
 });
 trainer.persist(modeEl, 'mode');
 trainer.persist(inversionEl, 'inversion');
 
-// Индексы видов аккордов, которые участвуют в тренировке
+// Виды аккордов, которые участвуют в тренировке (множество их short). Выбор сохраняется
+// по short, а не по номеру, чтобы он не съезжал при добавлении и перестановке видов
 const enabled = trainer.toggleGroup(
   document.getElementById('chords'),
-  CHORDS.slice(1).map((chord, i) => ({ id: i + 1, label: chord.short, title: chord.name, off: chord.off })),
+  CHORDS.map((chord) => ({ id: chord.short, label: chord.short, title: chord.name, off: chord.off })),
   'chords',
-  (set) => { document.getElementById('chordCount').textContent = `${set.size} of ${CHORDS.length - 1}`; },
+  (set) => { document.getElementById('chordCount').textContent = `${set.size} of ${CHORDS.length}`; },
 );
 
 // Есть ли у аккорда «двойник»: звучит ли он в каком-нибудь обращении так же, как другой включённый
 // вид или как он сам в другом обращении. При случайном обращении такой вопрос имел бы два верных
 // ответа, поэтому аккорды с двойником даются только в основном виде — тогда ответ один.
 // Зависит от включённых видов: m7 теряет обращения, только пока включён 6
-function hasTwin(index) {
-  const steps = CHORDS[index].steps;
-  for (let inversion = 0; inversion <= maxInversionOf(steps); inversion++) {
-    const same = SAME_SOUND[shapeKey(voicing(steps, inversion))];
-    if (same.some((s) => enabled.has(s.index) && !(s.index === index && s.inversion === inversion))) return true;
+function hasTwin(chord) {
+  for (let inversion = 0; inversion <= maxInversionOf(chord.steps); inversion++) {
+    const same = SAME_SOUND[shapeKey(voicing(chord.steps, inversion))];
+    if (same.some((s) => enabled.has(s.chord.short) && !(s.chord === chord && s.inversion === inversion))) return true;
   }
   return false;
 }
 
 function pickQuestion() {
-  const pool = [...enabled];       // только выбранные виды
-  const index = ET.pick(pool);
-  const steps = CHORDS[index].steps;
+  const chord = ET.pick(CHORDS.filter((c) => enabled.has(c.short)));      // только выбранные виды
+  const steps = chord.steps;
 
   // Если выбранного обращения у аккорда нет (3-е для трезвучия) — берём старшее из доступных.
   // При случайном обращении аккорд с двойником даётся только в основном виде
   const maxInversion = maxInversionOf(steps);
   const random = inversionEl.value === 'random';
   const inversion = random
-    ? (hasTwin(index) ? 0 : ET.rand(maxInversion + 1))
+    ? (hasTwin(chord) ? 0 : ET.rand(maxInversion + 1))
     : Math.min(Number(inversionEl.value), maxInversion);
 
   const tones = voicing(steps, inversion);
@@ -180,7 +178,7 @@ function pickQuestion() {
   const arpeggio = ET.modeIs(modeEl.value, 'arpeggio');
 
   return {
-    index, inversion, random, arpeggio, root,
+    chord, inversion, random, arpeggio, root,
     notes: tones.map((tone) => root + tone.offset),       // MIDI снизу вверх
     letters: tones.map((tone) => tone.letters),           // буквы тех же нот — для записи
   };
@@ -205,10 +203,10 @@ function describe(q) {
   const names = ET.spellNotes(q.root, q.notes.map((midi, i) => ({ midi, letters: q.letters[i] })));
   return {
     label: q.arpeggio ? 'arpeggio' : 'block',
-    answer: CHORDS[q.index].name,
+    answer: q.chord.name,
     notes: `${names.join(' ')} · ${INVERSIONS[q.inversion]}`,
     // Обращение произносится, только когда оно случайное — иначе оно и так известно
-    voice: q.random ? [sayOf(CHORDS[q.index]), INVERSION_SAY[q.inversion]] : sayOf(CHORDS[q.index]),
+    voice: q.random ? [sayOf(q.chord), INVERSION_SAY[q.inversion]] : sayOf(q.chord),
   };
 }
 </script>

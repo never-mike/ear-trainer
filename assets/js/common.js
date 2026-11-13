@@ -257,7 +257,16 @@ window.EarTrainer = (() => {
           el.selectedIndex = Math.max(0, [...el.options].findIndex((o) => o.defaultSelected));
         }
       }
-      el.addEventListener('change', () => save(key, el.value));
+      // Числовое поле приводится к целому в пределах min…max (пустое и нечисло — к значению
+      // по умолчанию), чтобы на экране стояло то же число, с которым работает тренировка
+      const normalize = () => {
+        if (el.type !== 'number') return;
+        const n = Math.round(Number(el.value));
+        if (el.value === '' || !Number.isFinite(n)) { el.value = el.defaultValue; return; }
+        el.value = Math.min(Number(el.max || n), Math.max(Number(el.min || n), n));
+      };
+      normalize();
+      el.addEventListener('change', () => { normalize(); save(key, el.value); });
     }
 
     // Сетка кнопок-переключателей. items: [{ id, label, title, off }]; off — выключен по умолчанию.
