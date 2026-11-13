@@ -56,7 +56,9 @@ Notes stay between E2 and E5, a range chosen so that you can sing along with wha
 
 Open `index.html` in a browser. The pages work straight from the file system, so no web server is needed.
 
-To use it on a phone, host the repository on any static hosting (for example GitHub Pages) and open the URL in Safari. Deploy `index.html`, the trainer pages and the whole `assets/` folder. Then add the page to the Home Screen (Share → Add to Home Screen) and launch it from the icon, so that playback continues with the screen locked.
+To use it on a phone, host the repository on any static hosting (for example GitHub Pages) and open the URL in Safari. Deploy `index.html`, the trainer pages, `sw.js` and the whole `assets/` folder. Then add the page to the Home Screen (Share → Add to Home Screen) and launch it from the icon, so that playback continues with the screen locked.
+
+Once opened online, the hosted version is cached by a service worker and keeps working without a network connection. When online it always loads the latest deployed version.
 
 ## Project structure
 
@@ -70,6 +72,7 @@ assets/
   css/common.css      shared styles
   js/common.js        shared engine: audio, voice, Start/Stop loop, tempo, settings
   voice/*.js          generated voice answers, one file per trainer
+sw.js                 service worker: offline cache
 make-voice.sh         regenerates the voice files
 ```
 

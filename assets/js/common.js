@@ -16,6 +16,13 @@
 //   onStart()       — необязательный: вызывается при каждом нажатии Start
 // Разметка страницы должна содержать элементы #status, #answer, #notes, #diag, #bpm, #repeats,
 // #replay, #start и #stop; файл с голосом (window.VOICE_DATA) подключается перед этим скриптом.
+
+// Офлайн-кеш (sw.js) — только при открытии по http(s): на file:// service worker недоступен.
+// Этот файл подключён и в меню (index.html) — ради этой регистрации.
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 window.EarTrainer = (() => {
   // ---------- Настройки ----------
   const LOW = 40;            // E2 — нижняя граница: диапазон выбран так, чтобы ноты можно было пропеть
