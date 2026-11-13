@@ -56,6 +56,9 @@
     <label>Tempo, bpm
       <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
     </label>
+    <label>Repeats
+      <input id="repeats" type="number" inputmode="numeric" min="1" max="8" step="1" value="4">
+    </label>
     <label>Replay after answer
       <input id="replay" type="checkbox" checked>
     </label>
@@ -73,7 +76,6 @@
 const ET = EarTrainer;
 
 const BAR_BEATS = 4;         // размер 4/4
-const REPEATS = 4;           // в вопросе последовательность звучит столько раз подряд (в повторе после ответа — один)
 const MIN_BARS = 1;
 const MAX_BARS = 16;
 const DEFAULT_BARS = 4;
@@ -226,24 +228,20 @@ function pickQuestion() {
 }
 
 // Такт — восемь восьмых: трезвучие, бас, и так четыре раза (как во вступлении «Imagine»).
-// В вопросе последовательность звучит REPEATS раз подряд, в повторе после ответа — один раз.
-// Возвращает общую длительность в секундах.
-function play(q, t, beat, replay) {
+// Возвращает длительность последовательности в секундах. Сколько раз она звучит в вопросе,
+// решает движок (поле Repeats, по умолчанию 4).
+function play(q, t, beat) {
   const eighth = beat / 2;
   const bar = BAR_BEATS * beat;
   const ring = RING_EIGHTHS * eighth;
-  const times = replay ? 1 : REPEATS;
-  const bars = q.chords.length;
-  for (let r = 0; r < times; r++) {
-    q.chords.forEach((chord, i) => {
-      for (let k = 0; k < BAR_BEATS; k++) {
-        const at = t + (r * bars + i) * bar + k * beat;
-        for (const midi of chord.upper) ET.playNote(midi, at, ring, UPPER_LEVEL);
-        ET.playNote(chord.bass, at + eighth, ring, BASS_LEVEL);
-      }
-    });
-  }
-  return times * bars * bar;
+  q.chords.forEach((chord, i) => {
+    for (let k = 0; k < BAR_BEATS; k++) {
+      const at = t + i * bar + k * beat;
+      for (const midi of chord.upper) ET.playNote(midi, at, ring, UPPER_LEVEL);
+      ET.playNote(chord.bass, at + eighth, ring, BASS_LEVEL);
+    }
+  });
+  return q.chords.length * bar;
 }
 
 // ---------- Ответ ----------
@@ -266,7 +264,7 @@ function rows(items, separator) {
 function describe(q) {
   const bars = q.degrees.length;
   return {
-    label: `${bars} ${bars === 1 ? 'bar' : 'bars'} × ${REPEATS}`,
+    label: `${bars} ${bars === 1 ? 'bar' : 'bars'}`,
     answer: rows(q.degrees.map((degree) => NUMERALS[degree]), ' – '),
     notes: `Key of ${KEYS[q.key].name}\n${rows(q.degrees.map((degree) => chordName(q.key, degree)), '  ')}`,
     voice: q.degrees.map((degree) => degree + 1),      // записи 1…7 — номера ступеней

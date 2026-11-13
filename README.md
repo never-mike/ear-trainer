@@ -24,7 +24,7 @@ A chord is played and you name its quality.
 
 ### Progressions
 
-A chord progression in a major key is played four times and you name the scale degrees (I, ii, iii, IV, V, vi, vii°).
+A chord progression in a major key is played several times in a row (four by default) and you name the scale degrees (I, ii, iii, IV, V, vi, vii°).
 
 - Key: any of the 12 major keys, or random.
 - Length: 1 to 16 bars, one chord per bar, in 4/4.
@@ -34,7 +34,12 @@ A chord progression in a major key is played four times and you name the scale d
 
 ## Common settings
 
-Every trainer has a tempo (30–240 bpm, default 80) that sets the note lengths and pauses, and a **Replay after answer** switch that plays the question once more after the answer. All settings can be changed while the trainer is running and are remembered per trainer in the browser.
+Every trainer has:
+
+- **Tempo** (30–240 bpm, default 80), which sets the note lengths and pauses.
+- **Repeats** (1–8): how many times in a row the question is played before the pause. The default is 4.
+- **Replay after answer**: plays the question once more after the answer.
+ All settings can be changed while the trainer is running and are remembered per trainer in the browser.
 
 Notes stay within the guitar range, from the open low E string (E2) to the 12th fret of the high E string (E5).
 

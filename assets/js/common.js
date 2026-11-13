@@ -5,21 +5,22 @@
 // Страница тренировки вызывает EarTrainer.create({ id, pickQuestion, play, describe }), где:
 //   id              — имя тренировки; префикс ключей localStorage (ear-trainer.<id>.*)
 //   pickQuestion()  — возвращает объект-вопрос (любой формы, движок в него не заглядывает)
-//   play(q, t, beat, replay) — планирует звучание вопроса с момента t (через EarTrainer.playNote),
-//                     beat — длительность доли в секундах, replay — true для повтора после ответа;
-//                     возвращает длину звучания в секундах
+//   play(q, t, beat) — планирует одно звучание вопроса с момента t (через EarTrainer.playNote),
+//                     beat — длительность доли в секундах; возвращает длину звучания в секундах.
+//                     Повторы вопроса (поле #repeats) делает движок, вызывая play несколько раз
 //   describe(q)     — { label, answer, notes, voice }: подпись в статусе, текст ответа,
 //                     строка с нотами и индекс записи в window.VOICE_DATA
 //                     (или массив индексов — записи прозвучат подряд)
 //   onStart()       — необязательный: вызывается при каждом нажатии Start
-// Разметка страницы должна содержать элементы #status, #answer, #notes, #diag, #bpm, #replay,
-// #start и #stop; файл с голосом (window.VOICE_DATA) подключается перед этим скриптом.
+// Разметка страницы должна содержать элементы #status, #answer, #notes, #diag, #bpm, #repeats,
+// #replay, #start и #stop; файл с голосом (window.VOICE_DATA) подключается перед этим скриптом.
 window.EarTrainer = (() => {
   // ---------- Настройки ----------
   const LOW = 40;            // E2 — открытая 6-я струна
   const HIGH = 76;           // E5 — 12-й лад 1-й струны
   const DEFAULT_BPM = 80;    // темп по умолчанию, размер 4/4
   const BAR_BEATS = 4;       // паузы (на раздумье и после ответа) — целый такт
+  const MAX_REPEATS = 8;     // верхняя граница поля «Repeats»
   const VOLUME = 0.3;
   const VOICE_GAIN = 2.5;    // громкость голоса относительно нот
   const VOICE_GAP = 0.15;    // пауза между записями, если ответ состоит из нескольких, с
@@ -75,6 +76,7 @@ window.EarTrainer = (() => {
     const notesEl = $('notes');
     const diagEl = $('diag');
     const bpmEl = $('bpm');
+    const repeatsEl = $('repeats');
     const replayEl = $('replay');
     const startBtn = $('start');
     const stopBtn = $('stop');
@@ -140,6 +142,7 @@ window.EarTrainer = (() => {
     }
 
     persist(bpmEl, 'bpm');
+    persist(repeatsEl, 'repeats');
     persist(replayEl, 'replay');
 
     // Длительность одной доли в секундах по текущему темпу из поля ввода
@@ -198,7 +201,21 @@ window.EarTrainer = (() => {
     // ---------- Цикл ----------
     let runId = 0;        // меняется при каждом старте/стопе — так отменяется текущий цикл
 
-    const playQuestion = (q, replay) => trainer.play(q, ctx.currentTime + 0.08, beatSec(), replay);
+    // Сколько раз подряд звучит вопрос; значение по умолчанию у каждой тренировки своё —
+    // это атрибут value поля #repeats в разметке
+    function repeatCount() {
+      const n = Math.round(Number(repeatsEl.value)) || Number(repeatsEl.defaultValue) || 1;
+      return Math.min(MAX_REPEATS, Math.max(1, n));
+    }
+
+    // Планирует вопрос times раз подряд без пауз, возвращает общую длительность в секундах
+    function playQuestion(q, times) {
+      const start = ctx.currentTime + 0.08;
+      const beat = beatSec();
+      let total = 0;
+      for (let i = 0; i < times; i++) total += trainer.play(q, start + total, beat);
+      return total;
+    }
 
     async function run() {
       const my = ++runId;
@@ -229,7 +246,7 @@ window.EarTrainer = (() => {
         statusEl.textContent = info.label ? `#${count} · ${info.label}` : `#${count}`;
         answerEl.textContent = '?';
         notesEl.textContent = '';
-        let len = playQuestion(q, false);
+        let len = playQuestion(q, repeatCount());
         await sleep(len + BAR_BEATS * beatSec());
         if (my !== runId) break;
 
@@ -243,8 +260,8 @@ window.EarTrainer = (() => {
         }
 
         if (replayEl.checked) {
-          // Повтор вопроса, чтобы услышать его, уже зная ответ, и пауза в такт
-          len = playQuestion(q, true);
+          // Повтор вопроса (один раз), чтобы услышать его, уже зная ответ, и пауза в такт
+          len = playQuestion(q, 1);
           await sleep(len + BAR_BEATS * beatSec());
         } else if (!spoken) {
           // Без повтора и без голоса — такт тишины, чтобы успеть прочитать ответ
