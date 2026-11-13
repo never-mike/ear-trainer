@@ -45,7 +45,7 @@
 // Аккорды — ступени мажорного лада (I ii iii IV V vi vii°), по одному на такт, размер 4/4.
 const ET = EarTrainer;
 
-const BAR_BEATS = 4;         // размер 4/4
+const BAR_BEATS = ET.BAR_BEATS;      // размер 4/4
 const MIN_BARS = 1;
 const MAX_BARS = 16;
 const DEFAULT_BARS = 4;
@@ -133,7 +133,7 @@ function randomProgression(bars) {
 // (для длин больше четырёх тактов — через раз), иначе склеиваем из более коротких.
 function commonProgression(bars) {
   const exact = COMMON.filter((p) => p.length === bars);
-  if (exact.length && (bars <= 4 || ET.rand(2) === 0)) return exact[ET.rand(exact.length)];
+  if (exact.length && (bars <= 4 || ET.rand(2) === 0)) return ET.pick(exact);
 
   const result = [];
   while (result.length < bars) {
@@ -143,14 +143,13 @@ function commonProgression(bars) {
     // Пока места хватает — любые куски от четырёх тактов; в хвост — самый длинный из подходящих
     const size = Math.min(4, Math.max(...fitting.map((p) => p.length)));
     const pool = fitting.filter((p) => (size === 4 ? p.length >= 4 : p.length === size));
-    result.push(...pool[ET.rand(pool.length)]);
+    result.push(...ET.pick(pool));
   }
   return result;
 }
 
 function generate(bars) {
-  const source = sourceEl.value;
-  const random = source === 'random' || (source === 'mixed' && ET.rand(2) === 0);
+  const random = ET.modeIs(sourceEl.value, 'random');
   return random ? randomProgression(bars) : commonProgression(bars);
 }
 

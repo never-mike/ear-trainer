@@ -37,7 +37,7 @@ window.EarTrainer = (() => {
   const MIN_BPM = 30;
   const MAX_BPM = 240;
   const DEFAULT_REPEATS = 4; // сколько раз подряд звучит вопрос, если тренировка не задала своё значение
-  const BAR_BEATS = 4;       // паузы (на раздумье и после ответа) — целый такт
+  const BAR_BEATS = 4;       // долей в такте (размер 4/4); паузы на раздумье и после ответа — целый такт
   const MAX_REPEATS = 8;     // верхняя граница поля «Repeats»
   const VOLUME = 0.3;
   const TONE_FADE = 0.3;     // время появления и затухания тянущегося тона (дрона), с
@@ -48,6 +48,11 @@ window.EarTrainer = (() => {
   const MIN_LEAD = 0.05;     // минимальный запас от текущего момента до планируемого звука, с
 
   const rand = (n) => Math.floor(Math.random() * n);
+  const pick = (list) => list[rand(list.length)];      // случайный элемент массива
+
+  // Выбор из списка вида «A / B / Mixed»: выбран ли вариант option. При значении 'mixed' —
+  // случайно, с вероятностью 1/2 (то есть на каждом вопросе заново)
+  const modeIs = (value, option) => value === option || (value === 'mixed' && rand(2) === 0);
   const sleep = (sec) => new Promise((r) => setTimeout(r, sec * 1000));
 
   // Случайное число 0…n−1, не равное except, — чтобы тональность не выпадала дважды подряд
@@ -497,7 +502,7 @@ window.EarTrainer = (() => {
   }
 
   return {
-    LOW, HIGH, KEYS, rand, randExcept, spell, spellNotes, atOrAbove, fillKeys,
+    LOW, HIGH, BAR_BEATS, KEYS, rand, randExcept, pick, modeIs, spell, spellNotes, atOrAbove, fillKeys,
     playNote, startTone, create,
   };
 })();

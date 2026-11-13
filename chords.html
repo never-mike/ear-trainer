@@ -41,7 +41,7 @@
 // Тренировка видов аккордов. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
 const ET = EarTrainer;
 
-const WHOLE_BEATS = 4;     // аккорд целиком звучит целую ноту (такт)
+const WHOLE_BEATS = ET.BAR_BEATS;      // аккорд целиком звучит целую ноту (такт)
 const ARPEGGIO_BEATS = 1;  // арпеджио: ноты вступают через четверть и звучат до конца последнего такта
 const MAX_INVERSION = 3;   // обращения выше третьего не используются (и не озвучены)
 const CHORD_LOW = 48;      // C3: ниже аккорды в тесном расположении звучат неразборчиво
@@ -161,7 +161,7 @@ function hasTwin(index) {
 
 function pickQuestion() {
   const pool = [...enabled];       // только выбранные виды
-  const index = pool[ET.rand(pool.length)];
+  const index = ET.pick(pool);
   const steps = CHORDS[index].steps;
 
   // Если выбранного обращения у аккорда нет (3-е для трезвучия) — берём старшее из доступных.
@@ -177,8 +177,7 @@ function pickQuestion() {
   const highestRoot = ET.HIGH - tones[tones.length - 1].offset;
   const root = lowestRoot + ET.rand(highestRoot - lowestRoot + 1);
 
-  const mode = modeEl.value;
-  const arpeggio = mode === 'arpeggio' || (mode === 'mixed' && ET.rand(2) === 0);
+  const arpeggio = ET.modeIs(modeEl.value, 'arpeggio');
 
   return {
     index, inversion, random, arpeggio, root,

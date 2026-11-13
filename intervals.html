@@ -36,8 +36,8 @@
 // Тренировка интервалов. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
 const ET = EarTrainer;
 
-const HALF_BEATS = 2;      // мелодически: каждая нота — половинная
-const WHOLE_BEATS = 4;     // гармонически: целая нота
+const WHOLE_BEATS = ET.BAR_BEATS;      // гармонически: целая нота — такт
+const HALF_BEATS = WHOLE_BEATS / 2;    // мелодически: каждая нота — половинная
 
 // Индекс = число полутонов. Название — оно же фраза для голоса: такие же должны быть
 // в make-voice.sh (ветка intervals), иначе запись не найдётся
@@ -68,13 +68,11 @@ const enabled = trainer.toggleGroup(
 
 function pickQuestion() {
   const pool = [...enabled];       // только выбранные интервалы
-  const semitones = pool[ET.rand(pool.length)];
+  const semitones = ET.pick(pool);
   const low = ET.LOW + ET.rand(ET.HIGH - ET.LOW - semitones + 1);
   const high = low + semitones;
-  const mode = modeEl.value;
-  const harmonic = mode === 'harmonic' || (mode === 'mixed' && ET.rand(2) === 0);
-  const dir = directionEl.value;   // влияет только на мелодический режим
-  const ascending = harmonic || dir === 'up' || (dir === 'mixed' && ET.rand(2) === 0);
+  const harmonic = ET.modeIs(modeEl.value, 'harmonic');
+  const ascending = harmonic || ET.modeIs(directionEl.value, 'up');     // направление — только у мелодических
   return {
     semitones, harmonic, ascending, low, high,
     first: ascending ? low : high,

@@ -29,7 +29,7 @@
 // и нужно назвать её ступень (все 12 хроматических). Вопрос: такт одного дрона, затем такт с нотой.
 const ET = EarTrainer;
 
-const BAR_BEATS = 4;            // такт 4/4: столько длится и вступление дрона, и нота
+const BAR_BEATS = ET.BAR_BEATS;        // такт 4/4: столько длится и вступление дрона, и нота
 const QUESTIONS_PER_KEY = 8;    // при случайной тональности дрон меняет её через столько вопросов
 const DRONE_LOW = 40;           // E2: нижняя тоника дрона лежит в октаве E2…D♯3, верхняя — октавой выше
 const DRONE_LEVEL = 0.35;       // громкость каждой из двух нот дрона
@@ -96,7 +96,7 @@ function pickQuestion() {
 
   const pool = [...enabled];       // только выбранные ступени
   let degree;
-  do { degree = pool[ET.rand(pool.length)]; } while (pool.length > 1 && degree === lastDegree);
+  do { degree = ET.pick(pool); } while (pool.length > 1 && degree === lastDegree);
   lastDegree = degree;
 
   const low = ET.atOrAbove(KEYS[key].pc, DRONE_LOW);     // нижняя тоника дрона
@@ -104,7 +104,7 @@ function pickQuestion() {
   // Нота — в одной из двух октав над верхней тоникой дрона, в пределах диапазона;
   // с самой тоникой дрона не совпадает, иначе её не было бы слышно отдельно
   const candidates = [high + degree, high + 12 + degree].filter((n) => n <= ET.HIGH && n !== high);
-  const note = candidates[ET.rand(candidates.length)];
+  const note = ET.pick(candidates);
 
   return { key, asked, random: fixed < 0, degree, low, note };
 }
