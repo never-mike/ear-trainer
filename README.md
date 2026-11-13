@@ -1,6 +1,6 @@
 # Ear Trainer
 
-A hands-free ear trainer for guitarists. Press **Start**, put the phone in your pocket and listen: the app plays a question, leaves a bar of silence to think, then speaks the answer aloud and shows it on screen.
+A hands-free ear trainer for musicians. Press **Start**, put the phone in your pocket and listen: the app plays a question, leaves a bar of silence to think, then speaks the answer aloud and shows it on screen.
 
 It is a set of static HTML pages with no build step, no dependencies and no server. It is designed for Safari on iPhone. Add it to the Home Screen and launch it from there: that way it keeps playing with the screen locked, while in a regular Safari tab iOS may stop the sound on lock.
 
@@ -14,11 +14,19 @@ Two notes are played and you name the interval between them, from a minor second
 - Mode: melodic (one note after the other), harmonic (both together) or mixed.
 - Direction for melodic intervals: ascending, descending or mixed.
 
+### Scale degrees
+
+A drone holds the tonic in two octaves. A note is played over it and you name its scale degree, out of all 12 chromatic ones (1, ♭2, 2, ♭3, 3, 4, ♯4, 5, ♭6, 6, ♭7, 7).
+
+- Choose which of the 12 degrees take part.
+- Each question goes: a bar of the drone alone, a bar with the note, a bar to think, the answer, then the note once more. The drone never stops.
+- Key: random (the drone moves to another key every 8 questions) or any fixed key.
+
 ### Chords
 
 A chord is played and you name its quality.
 
-- 33 chord types: triads, seventh chords, sixths, added-tone, altered and extended chords. The 12 triads and seventh chords are enabled by default.
+- 33 chord types: triads, seventh chords, sixths, added-tone, altered and extended chords. The first 12 (triads and seventh chords) are enabled by default.
 - Mode: block chord, arpeggio or mixed.
 - Inversion: root position, 1st, 2nd, 3rd or random. With random inversions the voice also names the inversion.
 
@@ -32,14 +40,6 @@ A chord progression in a major key is played several times in a row (four by def
 - Optionally keep the same progression and only change the key.
 - Chords are root-position triads, played as alternating eighth notes: chord, bass, chord, bass.
 
-### Scale degrees
-
-A drone holds the tonic in two octaves. A note is played over it and you name its scale degree, out of all 12 chromatic ones (1, ♭2, 2, ♭3, 3, 4, ♯4, 5, ♭6, 6, ♭7, 7).
-
-- Choose which of the 12 degrees take part.
-- Each question goes: a bar of the drone alone, a bar with the note, a bar to think, the answer, then the note once more. The drone never stops.
-- Key: random (the drone moves to another key every 8 questions) or any fixed key.
-
 ## Common settings
 
 Every trainer has:
@@ -47,9 +47,10 @@ Every trainer has:
 - **Tempo** (30–240 bpm, default 80), which sets the note lengths and pauses.
 - **Repeats** (1–8): how many times in a row the question is played before the pause. The default is 4, and 1 for scale degrees.
 - **Replay after answer**: plays the question once more after the answer.
- All settings can be changed while the trainer is running and are remembered per trainer in the browser.
 
-Notes stay within the guitar range, from the open low E string (E2) to the 12th fret of the high E string (E5).
+All settings can be changed while the trainer is running and are remembered per trainer in the browser.
+
+Notes stay between E2 and E5, a range chosen so that you can sing along with what you hear.
 
 ## Running
 
