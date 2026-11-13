@@ -78,6 +78,8 @@ const RING_EIGHTHS = 2;      // каждая восьмая звучит две 
 const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];              // полутоны от тоники
 const QUALITY = ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'];
 const NUMERALS = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+// Фразы для голоса; такие же должны быть в make-voice.sh (ветка progressions)
+const SAY = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'];
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };   // всегда в основном виде
 const SUFFIX = { maj: '', min: 'm', dim: '°' };
 
@@ -119,7 +121,7 @@ const barsEl = document.getElementById('bars');
 const sourceEl = document.getElementById('source');
 const sameEl = document.getElementById('same');
 
-const trainer = ET.create({ id: 'progressions', pickQuestion, play, describe, onStart });
+const trainer = ET.create({ id: 'progressions', pickQuestion, play, describe, onStart, phrases: SAY });
 ET.fillKeys(keyEl);        // до persist, иначе сохранённая тональность не восстановится
 trainer.persist(keyEl, 'key');
 trainer.persist(barsEl, 'bars');
@@ -244,7 +246,7 @@ function describe(q) {
     label: `${bars} ${bars === 1 ? 'bar' : 'bars'}`,
     answer: rows(q.degrees.map((degree) => NUMERALS[degree]), ' – '),
     notes: `Key of ${KEYS[q.key].name}\n${rows(q.degrees.map((degree) => chordName(q.key, degree)), '  ')}`,
-    voice: q.degrees.map((degree) => degree + 1),      // записи 1…7 — номера ступеней
+    voice: q.degrees.map((degree) => SAY[degree]),      // номера ступеней подряд
   };
 }
 </script>

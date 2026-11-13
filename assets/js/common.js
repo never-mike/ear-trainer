@@ -11,8 +11,10 @@
 //                     pass = { replay, repeat }: replay — это повтор после ответа,
 //                     repeat — номер звучания подряд, начиная с 0
 //   describe(q)     — { label, answer, notes, voice }: подпись в статусе, текст ответа,
-//                     строка с нотами и индекс записи в window.VOICE_DATA
-//                     (или массив индексов — записи прозвучат подряд)
+//                     строка с нотами и фраза для голоса — ключ записи в window.VOICE_DATA
+//                     (или массив фраз — записи прозвучат подряд)
+//   phrases         — необязательный: все фразы, которые тренировка может произнести; при первом
+//                     Start сверяются с файлом голоса, недостающие выводятся в #diag
 //   onStart()       — необязательный: вызывается при каждом нажатии Start
 // Разметка страницы должна содержать элементы #status, #answer, #notes, #diag, #bpm, #repeats,
 // #replay, #start и #stop; файл с голосом (window.VOICE_DATA) подключается перед этим скриптом.
@@ -263,37 +265,42 @@ window.EarTrainer = (() => {
     }
 
     // ---------- Голос ----------
-    // Записи лежат в window.VOICE_DATA как base64 (m4a). Встроены в скрипт, а не грузятся
-    // через fetch, чтобы страница работала и как file://.
-    let voiceBuffers = null;     // null — ещё не декодировали; элемент null — запись не декодировалась
+    // Записи лежат в window.VOICE_DATA как { фраза: base64 (m4a) }. Встроены в скрипт, а не грузятся
+    // через fetch, чтобы страница работала и как file://. Ключ — сама произносимая фраза,
+    // поэтому порядок записей не важен, а расхождение с тренировкой видно сразу (см. phrases)
+    let voiceBuffers = null;     // null — ещё не декодировали; иначе { фраза: AudioBuffer }
 
     async function loadVoice() {
       if (voiceBuffers) return;
-      const data = window.VOICE_DATA || [];
-      let lastError = data.length ? '' : 'voice file not loaded';
-      const decode = async (base64, n) => {
-        if (!base64) return null;
+      const data = window.VOICE_DATA || {};
+      const recorded = Object.keys(data);
+      let lastError = recorded.length ? '' : 'voice file not loaded';
+      const buffers = {};
+      await Promise.all(recorded.map(async (phrase) => {
         try {
-          const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-          return await ctx.decodeAudioData(bytes.buffer);
+          const bytes = Uint8Array.from(atob(data[phrase]), (c) => c.charCodeAt(0));
+          buffers[phrase] = await ctx.decodeAudioData(bytes.buffer);
         } catch (e) {
-          lastError = `#${n}: ${e.message || e}`;
-          return null;           // без голоса останется ответ текстом
+          lastError = `"${phrase}": ${e.message || e}`;      // без голоса останется ответ текстом
         }
-      };
-      voiceBuffers = await Promise.all(data.map(decode));
-      // Если голос не загрузился — показываем причину на экране, а не молчим
-      const expected = data.filter(Boolean).length;
-      const ok = voiceBuffers.filter(Boolean).length;
-      diagEl.textContent = expected && ok === expected ? '' : `Voice: ${ok}/${expected} loaded — ${lastError}`;
+      }));
+      voiceBuffers = buffers;
+
+      // Если голос не загрузился или в файле нет нужных фраз — показываем причину, а не молчим
+      const problems = [];
+      const ok = Object.keys(buffers).length;
+      if (!recorded.length || ok < recorded.length) problems.push(`${ok}/${recorded.length} loaded — ${lastError}`);
+      const missing = (trainer.phrases || []).filter((phrase) => !recorded.includes(phrase));
+      if (missing.length) problems.push(`no recording for ${missing.map((p) => `"${p}"`).join(', ')}`);
+      diagEl.textContent = problems.length ? `Voice: ${problems.join('; ')}` : '';
     }
 
-    // Произносит ответ с момента start: одну запись или несколько подряд (indices — индекс или массив индексов).
+    // Произносит ответ с момента start: одну запись или несколько подряд (phrases — фраза или массив фраз).
     // Возвращает общую длительность в секундах (0 — если записей нет)
-    function speak(indices, start) {
+    function speak(phrases, start) {
       let t = start;
-      for (const index of [].concat(indices)) {
-        const buf = voiceBuffers?.[index];
+      for (const phrase of [].concat(phrases)) {
+        const buf = voiceBuffers?.[phrase];
         if (!buf) continue;
         const src = ctx.createBufferSource();
         const gain = ctx.createGain();

@@ -59,7 +59,8 @@ const ET = EarTrainer;
 const HALF_BEATS = 2;      // мелодически: каждая нота — половинная
 const WHOLE_BEATS = 4;     // гармонически: целая нота
 
-// Индекс = число полутонов; тот же порядок в assets/voice/intervals.js и make-voice.sh
+// Индекс = число полутонов. Название — оно же фраза для голоса: такие же должны быть
+// в make-voice.sh (ветка intervals), иначе запись не найдётся
 const INTERVALS = [
   null,
   'Minor second', 'Major second', 'Minor third', 'Major third',
@@ -74,7 +75,7 @@ const LETTER_STEPS = [null, 1, 1, 2, 2, 3, [3, 4], 4, 5, 5, 6, 6, 7];
 const modeEl = document.getElementById('mode');
 const directionEl = document.getElementById('direction');
 
-const trainer = ET.create({ id: 'intervals', pickQuestion, play, describe });
+const trainer = ET.create({ id: 'intervals', pickQuestion, play, describe, phrases: INTERVALS.slice(1) });
 trainer.persist(modeEl, 'mode');
 trainer.persist(directionEl, 'direction');
 
@@ -127,7 +128,7 @@ function describe(q) {
     notes: q.harmonic
       ? `${low} + ${high}`
       : q.ascending ? `${low} ↑ ${high}` : `${high} ↓ ${low}`,
-    voice: q.semitones,
+    voice: INTERVALS[q.semitones],
   };
 }
 </script>

@@ -55,20 +55,26 @@ const DRONE_LOW = 40;           // E2: нижняя тоника дрона ле
 const DRONE_LEVEL = 0.35;       // громкость каждой из двух нот дрона
 const NOTE_LEVEL = 0.8;         // громкость ноты-вопроса
 
-// Индекс = полутон от тоники (0…11); запись голоса — индекс + 1, тот же порядок в make-voice.sh.
-// letter — на сколько букв ступень отстоит от тоники (нужно для записи ноты с правильным знаком).
+// Индекс = полутон от тоники (0…11).
+// letter — на сколько букв ступень отстоит от тоники (нужно для записи ноты с правильным знаком);
+// say — фраза для голоса: такие же должны быть в make-voice.sh (ветка degrees), иначе запись не найдётся.
 const DEGREES = [
-  { name: '1',  letter: 0 }, { name: '♭2', letter: 1 }, { name: '2',  letter: 1 },
-  { name: '♭3', letter: 2 }, { name: '3',  letter: 2 }, { name: '4',  letter: 3 },
-  { name: '♯4', letter: 3 }, { name: '5',  letter: 4 }, { name: '♭6', letter: 5 },
-  { name: '6',  letter: 5 }, { name: '♭7', letter: 6 }, { name: '7',  letter: 6 },
+  { name: '1',  letter: 0, say: 'One' },        { name: '♭2', letter: 1, say: 'Flat two' },
+  { name: '2',  letter: 1, say: 'Two' },        { name: '♭3', letter: 2, say: 'Flat three' },
+  { name: '3',  letter: 2, say: 'Three' },      { name: '4',  letter: 3, say: 'Four' },
+  { name: '♯4', letter: 3, say: 'Sharp four' }, { name: '5',  letter: 4, say: 'Five' },
+  { name: '♭6', letter: 5, say: 'Flat six' },   { name: '6',  letter: 5, say: 'Six' },
+  { name: '♭7', letter: 6, say: 'Flat seven' }, { name: '7',  letter: 6, say: 'Seven' },
 ];
 
 const KEYS = ET.KEYS;      // тональности — общие для всех тренировок, см. common.js
 
 const keyEl = document.getElementById('key');
 
-const trainer = ET.create({ id: 'degrees', pickQuestion, play, describe, onStart });
+const trainer = ET.create({
+  id: 'degrees', pickQuestion, play, describe, onStart,
+  phrases: DEGREES.map((degree) => degree.say),
+});
 ET.fillKeys(keyEl);        // до persist, иначе сохранённая тональность не восстановится
 trainer.persist(keyEl, 'key');
 
@@ -151,7 +157,7 @@ function describe(q) {
     label: q.random ? `drone ${q.asked}/${QUESTIONS_PER_KEY}` : '',
     answer: DEGREES[q.degree].name,
     notes: `${noteName(q.key, q.degree)} over ${KEYS[q.key].name}`,
-    voice: q.degree + 1,
+    voice: DEGREES[q.degree].say,
   };
 }
 </script>

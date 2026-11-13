@@ -67,8 +67,10 @@ const MAX_INVERSION = 3;   // обращения выше третьего не 
 const CHORD_LOW = 48;      // C3: ниже аккорды в тесном расположении звучат неразборчиво
 const NOTES_LEVEL = 2;     // суммарная громкость нот аккорда — как у двух нот интервала
 
-// Индекс = номер записи в assets/voice/chords.js; тот же порядок в make-voice.sh.
-// steps — полутоны от основного тона в основном виде; off — вид выключен по умолчанию.
+// Индекс (с 1) — id вида в сохранённых настройках, поэтому новые виды добавляются в конец.
+// steps — полутоны от основного тона в основном виде; off — вид выключен по умолчанию;
+// say — фраза для голоса, если она отличается от name. Такие же фразы должны быть
+// в make-voice.sh (ветка chords), иначе запись не найдётся.
 // У 11, maj7♯11, 13 и m13 часть ступеней пропущена, как это принято на практике.
 const CHORDS = [
   null,
@@ -76,34 +78,34 @@ const CHORDS = [
   { name: 'Minor',               short: 'min',  steps: [0, 3, 7] },
   { name: 'Diminished',          short: 'dim',  steps: [0, 3, 6] },
   { name: 'Augmented',           short: 'aug',  steps: [0, 4, 8] },
-  { name: 'Sus2',                short: 'sus2', steps: [0, 2, 7] },
-  { name: 'Sus4',                short: 'sus4', steps: [0, 5, 7] },
+  { name: 'Sus2',                short: 'sus2', steps: [0, 2, 7], say: 'Sus two' },
+  { name: 'Sus4',                short: 'sus4', steps: [0, 5, 7], say: 'Sus four' },
   { name: 'Major seventh',       short: 'maj7', steps: [0, 4, 7, 11] },
   { name: 'Dominant seventh',    short: '7',    steps: [0, 4, 7, 10] },
   { name: 'Minor seventh',       short: 'm7',   steps: [0, 3, 7, 10] },
-  { name: 'Half-diminished',     short: 'm7♭5', steps: [0, 3, 6, 10] },
+  { name: 'Half-diminished',     short: 'm7♭5', steps: [0, 3, 6, 10], say: 'Half diminished' },
   { name: 'Diminished seventh',  short: 'dim7', steps: [0, 3, 6, 9] },
   { name: 'Minor major seventh', short: 'mM7',  steps: [0, 3, 7, 11] },
   // Дополнительные виды
   { name: 'Power chord',         short: '5',       steps: [0, 7],                   off: true },
   { name: 'Major sixth',         short: '6',       steps: [0, 4, 7, 9],             off: true },
   { name: 'Minor sixth',         short: 'm6',      steps: [0, 3, 7, 9],             off: true },
-  { name: 'Six-nine',            short: '6/9',     steps: [0, 4, 7, 9, 14],         off: true },
-  { name: 'Add9',                short: 'add9',    steps: [0, 4, 7, 14],            off: true },
-  { name: 'Minor add9',          short: 'madd9',   steps: [0, 3, 7, 14],            off: true },
-  { name: 'Add11',               short: 'add11',   steps: [0, 4, 7, 17],            off: true },
-  { name: '7sus4',               short: '7sus4',   steps: [0, 5, 7, 10],            off: true },
-  { name: '7♭5',                 short: '7♭5',     steps: [0, 4, 6, 10],            off: true },
-  { name: '7♯5',                 short: '7♯5',     steps: [0, 4, 8, 10],            off: true },
-  { name: 'Maj7♯5',              short: 'maj7♯5',  steps: [0, 4, 8, 11],            off: true },
+  { name: 'Six-nine',            short: '6/9',     steps: [0, 4, 7, 9, 14], say: 'Six nine',         off: true },
+  { name: 'Add9',                short: 'add9',    steps: [0, 4, 7, 14], say: 'Add nine',            off: true },
+  { name: 'Minor add9',          short: 'madd9',   steps: [0, 3, 7, 14], say: 'Minor add nine',            off: true },
+  { name: 'Add11',               short: 'add11',   steps: [0, 4, 7, 17], say: 'Add eleven',            off: true },
+  { name: '7sus4',               short: '7sus4',   steps: [0, 5, 7, 10], say: 'Seven sus four',            off: true },
+  { name: '7♭5',                 short: '7♭5',     steps: [0, 4, 6, 10], say: 'Seven flat five',            off: true },
+  { name: '7♯5',                 short: '7♯5',     steps: [0, 4, 8, 10], say: 'Seven sharp five',            off: true },
+  { name: 'Maj7♯5',              short: 'maj7♯5',  steps: [0, 4, 8, 11], say: 'Major seven sharp five',            off: true },
   { name: 'Dominant ninth',      short: '9',       steps: [0, 4, 7, 10, 14],        off: true },
   { name: 'Major ninth',         short: 'maj9',    steps: [0, 4, 7, 11, 14],        off: true },
   { name: 'Minor ninth',         short: 'm9',      steps: [0, 3, 7, 10, 14],        off: true },
-  { name: '7♭9',                 short: '7♭9',     steps: [0, 4, 7, 10, 13],        off: true },
-  { name: '7♯9',                 short: '7♯9',     steps: [0, 4, 7, 10, 15],        off: true },
+  { name: '7♭9',                 short: '7♭9',     steps: [0, 4, 7, 10, 13], say: 'Seven flat nine',        off: true },
+  { name: '7♯9',                 short: '7♯9',     steps: [0, 4, 7, 10, 15], say: 'Seven sharp nine',        off: true },
   { name: 'Dominant eleventh',   short: '11',      steps: [0, 7, 10, 14, 17],       off: true },
   { name: 'Minor eleventh',      short: 'm11',     steps: [0, 3, 7, 10, 14, 17],    off: true },
-  { name: 'Maj7♯11',             short: 'maj7♯11', steps: [0, 4, 7, 11, 18],        off: true },
+  { name: 'Maj7♯11',             short: 'maj7♯11', steps: [0, 4, 7, 11, 18], say: 'Major seven sharp eleven',        off: true },
   { name: 'Dominant thirteenth', short: '13',      steps: [0, 4, 7, 10, 14, 21],    off: true },
   { name: 'Minor thirteenth',    short: 'm13',     steps: [0, 3, 7, 10, 14, 21],    off: true },
 ];
@@ -115,7 +117,8 @@ const STEP_LETTERS = {
   13: 1, 14: 1, 15: 1, 17: 3, 18: 3, 21: 5,
 };
 const INVERSIONS = ['root position', '1st inversion', '2nd inversion', '3rd inversion'];
-const INVERSION_VOICE = CHORDS.length;   // записи после видов аккордов — названия обращений (0…3)
+const INVERSION_SAY = ['Root position', 'First inversion', 'Second inversion', 'Third inversion'];
+const sayOf = (chord) => chord.say || chord.name;     // фраза для голоса
 
 // Сколько обращений у аккорда: у трезвучий три (0…2), у аккордов из четырёх и более нот — четыре (0…3)
 const maxInversionOf = (steps) => Math.min(MAX_INVERSION, steps.length - 1);
@@ -148,7 +151,10 @@ CHORDS.forEach((chord, index) => {
 const modeEl = document.getElementById('mode');
 const inversionEl = document.getElementById('inversion');
 
-const trainer = ET.create({ id: 'chords', pickQuestion, play, describe });
+const trainer = ET.create({
+  id: 'chords', pickQuestion, play, describe,
+  phrases: [...CHORDS.slice(1).map(sayOf), ...INVERSION_SAY],
+});
 trainer.persist(modeEl, 'mode');
 trainer.persist(inversionEl, 'inversion');
 
@@ -223,7 +229,7 @@ function describe(q) {
     answer: CHORDS[q.index].name,
     notes: `${names.join(' ')} · ${INVERSIONS[q.inversion]}`,
     // Обращение произносится, только когда оно случайное — иначе оно и так известно
-    voice: q.random ? [q.index, INVERSION_VOICE + q.inversion] : q.index,
+    voice: q.random ? [sayOf(CHORDS[q.index]), INVERSION_SAY[q.inversion]] : sayOf(CHORDS[q.index]),
   };
 }
 </script>
