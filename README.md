@@ -28,7 +28,7 @@ A chord is played and you name its quality.
 
 - 33 chord types: triads, seventh chords, sixths, added-tone, altered and extended chords. The first 12 (triads and seventh chords) are enabled by default.
 - Mode: block chord, arpeggio or mixed.
-- Inversion: root position, 1st, 2nd, 3rd or random. With random inversions the voice also names the inversion.
+- Inversion: root position, 1st, 2nd, 3rd or random. With random inversions the voice also names the inversion. Chords that sound identical to another enabled chord in some inversion (for example, sus2 in 2nd inversion and sus4 in root position) are then played in root position only, so every question has one answer.
 
 ### Progressions
 

@@ -117,6 +117,34 @@ const STEP_LETTERS = {
 const INVERSIONS = ['root position', '1st inversion', '2nd inversion', '3rd inversion'];
 const INVERSION_VOICE = CHORDS.length;   // записи после видов аккордов — названия обращений (0…3)
 
+// Сколько обращений у аккорда: у трезвучий три (0…2), у аккордов из четырёх и более нот — четыре (0…3)
+const maxInversionOf = (steps) => Math.min(MAX_INVERSION, steps.length - 1);
+
+// Расположение аккорда в обращении: тоны снизу вверх, offset — полутоны от основного тона.
+// В обращении N басом становится N-я нота аккорда, а ноты ниже неё переносятся вверх на октаву
+// (у аккордов шире октавы, например add9, — на две, иначе они остались бы ниже баса)
+function voicing(steps, inversion) {
+  const bass = steps[inversion];
+  return steps.map((step, i) => {
+    let offset = step;
+    if (i < inversion) while (offset < bass) offset += 12;
+    return { offset, letters: STEP_LETTERS[step] };
+  }).sort((a, b) => a.offset - b.offset);
+}
+
+// Некоторые аккорды в разных обращениях звучат одинаково, и на слух их не различить:
+// sus2 во 2-м обращении — это sus4 в основном виде, 6 — обращение m7, m6 — обращение m7♭5,
+// а у симметричных aug и dim7 совпадают все обращения. SAME_SOUND собирает такие совпадения:
+// ключ — интервалы расположения от баса, значение — все пары { index, inversion } с таким звучанием
+const shapeKey = (tones) => tones.map((tone) => tone.offset - tones[0].offset).join(',');
+const SAME_SOUND = {};
+CHORDS.forEach((chord, index) => {
+  if (!chord) return;
+  for (let inversion = 0; inversion <= maxInversionOf(chord.steps); inversion++) {
+    (SAME_SOUND[shapeKey(voicing(chord.steps, inversion))] ||= []).push({ index, inversion });
+  }
+});
+
 const modeEl = document.getElementById('mode');
 const inversionEl = document.getElementById('inversion');
 
@@ -132,25 +160,33 @@ const enabled = trainer.toggleGroup(
   (set) => { document.getElementById('chordCount').textContent = `${set.size} of ${CHORDS.length - 1}`; },
 );
 
+// Есть ли у аккорда «двойник»: звучит ли он в каком-нибудь обращении так же, как другой включённый
+// вид или как он сам в другом обращении. При случайном обращении такой вопрос имел бы два верных
+// ответа, поэтому аккорды с двойником даются только в основном виде — тогда ответ один.
+// Зависит от включённых видов: m7 теряет обращения, только пока включён 6
+function hasTwin(index) {
+  const steps = CHORDS[index].steps;
+  for (let inversion = 0; inversion <= maxInversionOf(steps); inversion++) {
+    const same = SAME_SOUND[shapeKey(voicing(steps, inversion))];
+    if (same.some((s) => enabled.has(s.index) && !(s.index === index && s.inversion === inversion))) return true;
+  }
+  return false;
+}
+
 function pickQuestion() {
   const pool = [...enabled];       // только выбранные виды
   const index = pool[ET.rand(pool.length)];
   const steps = CHORDS[index].steps;
 
-  // Обращение: у трезвучий их три (0…2), у аккордов из четырёх и более нот — четыре (0…3).
   // Если выбранного обращения у аккорда нет (3-е для трезвучия) — берём старшее из доступных.
-  const maxInversion = Math.min(MAX_INVERSION, steps.length - 1);
+  // При случайном обращении аккорд с двойником даётся только в основном виде
+  const maxInversion = maxInversionOf(steps);
   const random = inversionEl.value === 'random';
-  const inversion = random ? ET.rand(maxInversion + 1) : Math.min(Number(inversionEl.value), maxInversion);
+  const inversion = random
+    ? (hasTwin(index) ? 0 : ET.rand(maxInversion + 1))
+    : Math.min(Number(inversionEl.value), maxInversion);
 
-  // В обращении N басом становится N-я нота аккорда, а ноты ниже неё переносятся вверх на октаву
-  // (у аккордов шире октавы, например add9, — на две, иначе они остались бы ниже баса)
-  const bass = steps[inversion];
-  const tones = steps.map((step, i) => {
-    let offset = step;
-    if (i < inversion) while (offset < bass) offset += 12;
-    return { offset, letters: STEP_LETTERS[step] };
-  }).sort((a, b) => a.offset - b.offset);
+  const tones = voicing(steps, inversion);
   const lowestRoot = CHORD_LOW - tones[0].offset;
   const highestRoot = ET.HIGH - tones[tones.length - 1].offset;
   const root = lowestRoot + ET.rand(highestRoot - lowestRoot + 1);
