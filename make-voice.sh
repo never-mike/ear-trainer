@@ -10,10 +10,13 @@ cd "$(dirname "$0")"
 TRAINER="${1:?Использование: ./make-voice.sh <тренировка> [голос]}"
 VOICE="${2:-Samantha}"
 
-# Фразы тренировки. Порядок = индекс записи в window.VOICE_DATA, начиная с 1 (нулевой элемент — null).
+# Фразы тренировки. Фраза — это и текст для say, и ключ записи в window.VOICE_DATA: страница
+# тренировки находит запись по фразе, поэтому фразы здесь и на странице должны совпадать буква
+# в букву (порядок не важен). Недостающие фразы страница покажет при первом Start.
+# В фразах нельзя использовать апостроф.
 case "$TRAINER" in
   intervals)
-    # Индекс = число полутонов (1…12)
+    # Как INTERVALS в intervals.html
     names=(
       "Minor second" "Major second" "Minor third" "Major third"
       "Perfect fourth" "Tritone" "Perfect fifth" "Minor sixth"
@@ -21,18 +24,18 @@ case "$TRAINER" in
     )
     ;;
   degrees)
-    # Индекс = полутон от тоники + 1 (1…12)
+    # Как say в DEGREES в degrees.html
     names=(
       "One" "Flat two" "Two" "Flat three" "Three" "Four"
       "Sharp four" "Five" "Flat six" "Six" "Flat seven" "Seven"
     )
     ;;
   progressions)
-    # Индекс = номер ступени (1…7)
+    # Как SAY в progressions.html
     names=("One" "Two" "Three" "Four" "Five" "Six" "Seven")
     ;;
   chords)
-    # 1…33 — виды аккордов (порядок как в CHORDS в chords.html), следующие четыре — обращения
+    # Виды аккордов (say или name в CHORDS в chords.html) и четыре обращения (INVERSION_SAY)
     names=(
       "Major" "Minor" "Diminished" "Augmented" "Sus two" "Sus four"
       "Major seventh" "Dominant seventh" "Minor seventh"
@@ -52,6 +55,13 @@ case "$TRAINER" in
     ;;
 esac
 
+# say при неизвестном голосе не падает, а молча говорит голосом по умолчанию — проверяем имя сами
+voices=("${(@f)$(say -v '?' | sed -E 's/ +[a-z]{2,3}_[A-Za-z0-9]+ +#.*$//')}")
+if (( ! ${voices[(Ie)$VOICE]} )); then
+  echo "Неизвестный голос: $VOICE (список: say -v '?')" >&2
+  exit 1
+fi
+
 OUT="assets/voice/$TRAINER.js"
 mkdir -p assets/voice
 tmp=$(mktemp -d)
@@ -59,15 +69,19 @@ trap 'rm -rf "$tmp"' EXIT
 
 {
   echo "// Сгенерировано make-voice.sh $TRAINER (голос: $VOICE). Не править вручную."
-  echo "// Значения — m4a (AAC) в base64; индексы начинаются с 1."
-  echo "window.VOICE_DATA = ["
-  echo "  null,"
+  echo "// Ключ — произносимая фраза, значение — её запись: m4a (AAC) в base64."
+  echo "window.VOICE_DATA = {"
   for i in {1..${#names}}; do
     say -v "$VOICE" -o "$tmp/$i.aiff" "${names[$i]}"
-    afconvert -f m4af -d aac -b 64000 "$tmp/$i.aiff" "$tmp/$i.m4a"
-    echo "  '$(base64 -i "$tmp/$i.m4a")',  // ${names[$i]}"
+    # Речь моно 22 кГц: 32 kbps хватает, а файл на треть меньше, чем при 64
+    afconvert -f m4af -d aac -b 32000 "$tmp/$i.aiff" "$tmp/$i.m4a"
+    echo "  '${names[$i]}': '$(base64 -i "$tmp/$i.m4a")',"
   done
-  echo "];"
-} > "$OUT"
+  echo "};"
+} > "$tmp/out.js"
+
+# Пишем во временный файл и переносим только готовый: при сбое (например, неизвестный голос)
+# прежний файл с голосом остаётся целым
+mv "$tmp/out.js" "$OUT"
 
 echo "$OUT: $(wc -c < "$OUT" | tr -d ' ') байт"

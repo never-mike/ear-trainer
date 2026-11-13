@@ -1,8 +1,11 @@
 /* Общие стили всех страниц: меню и тренировок */
 :root { color-scheme: dark; }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body { margin: 0; }
 body {
+  /* Не ниже экрана (чтобы экран с ответом занимал свободное место), но может быть и выше —
+     например, при раскрытом списке видов аккордов; dvh учитывает панели Safari */
+  min-height: 100vh; min-height: 100dvh;
   display: flex; flex-direction: column;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
   background: #111418; color: #e8eaed;

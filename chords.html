@@ -4,27 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111418">
 <title>Chords · Ear Trainer</title>
 <link rel="stylesheet" href="assets/css/common.css">
 </head>
 <body>
-  <a class="back" href="index.html">‹ Trainers</a>
-
-  <div class="screen">
-    <div id="status">Press Start</div>
-    <div id="answer"></div>
-    <div id="notes"></div>
-    <div id="diag"></div>
-  </div>
-
+  <!-- Только настройки этой тренировки. Остальное — ссылку «назад», экран с ответом, поля
+       Tempo/Repeats/Replay и кнопки Start/Stop — достраивает движок (EarTrainer.create) -->
   <div class="controls">
     <details class="group">
       <summary>Chord types <span id="chordCount"></span></summary>
       <div id="chords" class="toggles cols-5" role="group" aria-label="Chord types"></div>
     </details>
-    <label>Tempo, bpm
-      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
-    </label>
     <label>Mode
       <select id="mode">
         <option value="block" selected>Block</option>
@@ -41,16 +33,6 @@
         <option value="random">Random</option>
       </select>
     </label>
-    <label>Repeats
-      <input id="repeats" type="number" inputmode="numeric" min="1" max="8" step="1" value="4">
-    </label>
-    <label>Replay after answer
-      <input id="replay" type="checkbox" checked>
-    </label>
-    <div class="buttons">
-      <button id="start">Start</button>
-      <button id="stop" disabled>Stop</button>
-    </div>
   </div>
 
 <script src="assets/voice/chords.js"></script>
@@ -59,97 +41,152 @@
 // Тренировка видов аккордов. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
 const ET = EarTrainer;
 
-const WHOLE_BEATS = 4;     // аккорд целиком звучит целую ноту (такт)
+const WHOLE_BEATS = ET.BAR_BEATS;      // аккорд целиком звучит целую ноту (такт)
 const ARPEGGIO_BEATS = 1;  // арпеджио: ноты вступают через четверть и звучат до конца последнего такта
 const MAX_INVERSION = 3;   // обращения выше третьего не используются (и не озвучены)
 const CHORD_LOW = 48;      // C3: ниже аккорды в тесном расположении звучат неразборчиво
 const NOTES_LEVEL = 2;     // суммарная громкость нот аккорда — как у двух нот интервала
 
-// Индекс = номер записи в assets/voice/chords.js; тот же порядок в make-voice.sh.
-// steps — полутоны от основного тона в основном виде; off — вид выключен по умолчанию.
+// short — подпись на кнопке и id вида в сохранённых настройках (менять его — значит сбросить
+// у пользователя выбор этого вида); порядок в массиве — только порядок кнопок.
+// steps — полутоны от основного тона в основном виде; off — вид выключен по умолчанию;
+// say — фраза для голоса, если она отличается от name. Такие же фразы должны быть
+// в make-voice.sh (ветка chords), иначе запись не найдётся.
+// rootOnly — вид даётся только в основном виде: у аккордов с добавленными или пропущенными
+// тонами (5, 6/9, add9, add11, 11) «N-я нота в басу» не соответствует принятым названиям
+// обращений (у 11 без терции второй нотой идёт квинта, у add9 четвёртой — нона).
+// letters — поправки к STEP_LETTERS для этого вида (см. ниже).
 // У 11, maj7♯11, 13 и m13 часть ступеней пропущена, как это принято на практике.
 const CHORDS = [
-  null,
   { name: 'Major',               short: 'maj',  steps: [0, 4, 7] },
   { name: 'Minor',               short: 'min',  steps: [0, 3, 7] },
   { name: 'Diminished',          short: 'dim',  steps: [0, 3, 6] },
   { name: 'Augmented',           short: 'aug',  steps: [0, 4, 8] },
-  { name: 'Sus2',                short: 'sus2', steps: [0, 2, 7] },
-  { name: 'Sus4',                short: 'sus4', steps: [0, 5, 7] },
+  { name: 'Sus2',                short: 'sus2', steps: [0, 2, 7], say: 'Sus two' },
+  { name: 'Sus4',                short: 'sus4', steps: [0, 5, 7], say: 'Sus four' },
   { name: 'Major seventh',       short: 'maj7', steps: [0, 4, 7, 11] },
   { name: 'Dominant seventh',    short: '7',    steps: [0, 4, 7, 10] },
   { name: 'Minor seventh',       short: 'm7',   steps: [0, 3, 7, 10] },
-  { name: 'Half-diminished',     short: 'm7♭5', steps: [0, 3, 6, 10] },
-  { name: 'Diminished seventh',  short: 'dim7', steps: [0, 3, 6, 9] },
+  { name: 'Half-diminished',     short: 'm7♭5', steps: [0, 3, 6, 10], say: 'Half diminished' },
+  { name: 'Diminished seventh',  short: 'dim7', steps: [0, 3, 6, 9], letters: { 9: 6 } },
   { name: 'Minor major seventh', short: 'mM7',  steps: [0, 3, 7, 11] },
   // Дополнительные виды
-  { name: 'Power chord',         short: '5',       steps: [0, 7],                   off: true },
+  { name: 'Power chord',         short: '5',       steps: [0, 7], rootOnly: true,                   off: true },
   { name: 'Major sixth',         short: '6',       steps: [0, 4, 7, 9],             off: true },
   { name: 'Minor sixth',         short: 'm6',      steps: [0, 3, 7, 9],             off: true },
-  { name: 'Six-nine',            short: '6/9',     steps: [0, 4, 7, 9, 14],         off: true },
-  { name: 'Add9',                short: 'add9',    steps: [0, 4, 7, 14],            off: true },
-  { name: 'Minor add9',          short: 'madd9',   steps: [0, 3, 7, 14],            off: true },
-  { name: 'Add11',               short: 'add11',   steps: [0, 4, 7, 17],            off: true },
-  { name: '7sus4',               short: '7sus4',   steps: [0, 5, 7, 10],            off: true },
-  { name: '7♭5',                 short: '7♭5',     steps: [0, 4, 6, 10],            off: true },
-  { name: '7♯5',                 short: '7♯5',     steps: [0, 4, 8, 10],            off: true },
-  { name: 'Maj7♯5',              short: 'maj7♯5',  steps: [0, 4, 8, 11],            off: true },
+  { name: 'Six-nine',            short: '6/9',     steps: [0, 4, 7, 9, 14], say: 'Six nine', rootOnly: true,         off: true },
+  { name: 'Add9',                short: 'add9',    steps: [0, 4, 7, 14], say: 'Add nine', rootOnly: true,            off: true },
+  { name: 'Minor add9',          short: 'madd9',   steps: [0, 3, 7, 14], say: 'Minor add nine', rootOnly: true,            off: true },
+  { name: 'Add11',               short: 'add11',   steps: [0, 4, 7, 17], say: 'Add eleven', rootOnly: true,            off: true },
+  { name: '7sus4',               short: '7sus4',   steps: [0, 5, 7, 10], say: 'Seven sus four',            off: true },
+  { name: '7♭5',                 short: '7♭5',     steps: [0, 4, 6, 10], say: 'Seven flat five',            off: true },
+  { name: '7♯5',                 short: '7♯5',     steps: [0, 4, 8, 10], say: 'Seven sharp five',            off: true },
+  { name: 'Maj7♯5',              short: 'maj7♯5',  steps: [0, 4, 8, 11], say: 'Major seven sharp five',            off: true },
   { name: 'Dominant ninth',      short: '9',       steps: [0, 4, 7, 10, 14],        off: true },
   { name: 'Major ninth',         short: 'maj9',    steps: [0, 4, 7, 11, 14],        off: true },
   { name: 'Minor ninth',         short: 'm9',      steps: [0, 3, 7, 10, 14],        off: true },
-  { name: '7♭9',                 short: '7♭9',     steps: [0, 4, 7, 10, 13],        off: true },
-  { name: '7♯9',                 short: '7♯9',     steps: [0, 4, 7, 10, 15],        off: true },
-  { name: 'Dominant eleventh',   short: '11',      steps: [0, 7, 10, 14, 17],       off: true },
+  { name: '7♭9',                 short: '7♭9',     steps: [0, 4, 7, 10, 13], say: 'Seven flat nine',        off: true },
+  { name: '7♯9',                 short: '7♯9',     steps: [0, 4, 7, 10, 15], say: 'Seven sharp nine',        off: true },
+  { name: 'Dominant eleventh',   short: '11',      steps: [0, 7, 10, 14, 17], rootOnly: true,       off: true },
   { name: 'Minor eleventh',      short: 'm11',     steps: [0, 3, 7, 10, 14, 17],    off: true },
-  { name: 'Maj7♯11',             short: 'maj7♯11', steps: [0, 4, 7, 11, 18],        off: true },
+  { name: 'Maj7♯11',             short: 'maj7♯11', steps: [0, 4, 7, 11, 18], say: 'Major seven sharp eleven',        off: true },
   { name: 'Dominant thirteenth', short: '13',      steps: [0, 4, 7, 10, 14, 21],    off: true },
   { name: 'Minor thirteenth',    short: 'm13',     steps: [0, 3, 7, 10, 14, 21],    off: true },
 ];
+// На сколько букв тон аккорда отстоит от основного (для записи нот), по числу полутонов:
+// 3 и 4 — терция, 6 — ♭5, 8 — ♯5, 9 — секста, 13…15 — ♭9, 9 и ♯9, 17 и 18 — 11 и ♯11, 21 — 13.
+// Запись строгая, с дубль-диезами и дубль-бемолями там, где их требует теория. Поэтому в dim7
+// 9 полутонов — не секста, а уменьшённая септима (C E♭ G♭ B♭♭): это задано поправкой letters у вида
+const STEP_LETTERS = {
+  0: 0, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 4, 9: 5, 10: 6, 11: 6,
+  13: 1, 14: 1, 15: 1, 17: 3, 18: 3, 21: 5,
+};
 const INVERSIONS = ['root position', '1st inversion', '2nd inversion', '3rd inversion'];
-const INVERSION_VOICE = CHORDS.length;   // записи после видов аккордов — названия обращений (0…3)
+const INVERSION_SAY = ['Root position', 'First inversion', 'Second inversion', 'Third inversion'];
+const sayOf = (chord) => chord.say || chord.name;     // фраза для голоса
+
+// Старшее обращение аккорда: у трезвучий 2-е, у аккордов из четырёх и более нот — 3-е,
+// у видов с пометкой rootOnly обращений нет
+const maxInversionOf = (chord) => (chord.rootOnly ? 0 : Math.min(MAX_INVERSION, chord.steps.length - 1));
+
+// Расположение аккорда в обращении: тоны снизу вверх, offset — полутоны от основного тона.
+// В обращении N басом становится N-я нота аккорда, а ноты ниже неё переносятся вверх на октаву
+// (у аккордов шире октавы, например add9, — на две, иначе они остались бы ниже баса)
+function voicing(chord, inversion) {
+  const bass = chord.steps[inversion];
+  return chord.steps.map((step, i) => {
+    let offset = step;
+    if (i < inversion) while (offset < bass) offset += 12;
+    return { offset, letters: chord.letters?.[step] ?? STEP_LETTERS[step] };
+  }).sort((a, b) => a.offset - b.offset);
+}
+
+// Некоторые аккорды в разных обращениях звучат одинаково, и на слух их не различить:
+// sus2 во 2-м обращении — это sus4 в основном виде, 6 — обращение m7, m6 — обращение m7♭5,
+// а у симметричных aug и dim7 совпадают все обращения. SAME_SOUND собирает такие совпадения:
+// ключ — интервалы расположения от баса, значение — все пары { chord, inversion } с таким звучанием
+const shapeKey = (tones) => tones.map((tone) => tone.offset - tones[0].offset).join(',');
+const SAME_SOUND = {};
+for (const chord of CHORDS) {
+  for (let inversion = 0; inversion <= maxInversionOf(chord); inversion++) {
+    (SAME_SOUND[shapeKey(voicing(chord, inversion))] ||= []).push({ chord, inversion });
+  }
+}
 
 const modeEl = document.getElementById('mode');
 const inversionEl = document.getElementById('inversion');
 
-const trainer = ET.create({ id: 'chords', pickQuestion, play, describe });
+const trainer = ET.create({
+  id: 'chords', pickQuestion, play, describe,
+  phrases: [...CHORDS.map(sayOf), ...INVERSION_SAY],
+});
 trainer.persist(modeEl, 'mode');
 trainer.persist(inversionEl, 'inversion');
 
-// Индексы видов аккордов, которые участвуют в тренировке
+// Виды аккордов, которые участвуют в тренировке (множество их short). Выбор сохраняется
+// по short, а не по номеру, чтобы он не съезжал при добавлении и перестановке видов
 const enabled = trainer.toggleGroup(
   document.getElementById('chords'),
-  CHORDS.slice(1).map((chord, i) => ({ id: i + 1, label: chord.short, title: chord.name, off: chord.off })),
+  CHORDS.map((chord) => ({ id: chord.short, label: chord.short, title: chord.name, off: chord.off })),
   'chords',
-  (set) => { document.getElementById('chordCount').textContent = `${set.size} of ${CHORDS.length - 1}`; },
+  (set) => { document.getElementById('chordCount').textContent = `${set.size} of ${CHORDS.length}`; },
 );
 
+// Есть ли у аккорда «двойник»: звучит ли он в каком-нибудь обращении так же, как другой включённый
+// вид или как он сам в другом обращении. При случайном обращении такой вопрос имел бы два верных
+// ответа, поэтому аккорды с двойником даются только в основном виде — тогда ответ один.
+// Зависит от включённых видов: m7 теряет обращения, только пока включён 6
+function hasTwin(chord) {
+  for (let inversion = 0; inversion <= maxInversionOf(chord); inversion++) {
+    const same = SAME_SOUND[shapeKey(voicing(chord, inversion))];
+    if (same.some((s) => enabled.has(s.chord.short) && !(s.chord === chord && s.inversion === inversion))) return true;
+  }
+  return false;
+}
+
 function pickQuestion() {
-  const pool = [...enabled];       // только выбранные виды
-  const index = pool[ET.rand(pool.length)];
-  const steps = CHORDS[index].steps;
+  const chord = ET.pick(CHORDS.filter((c) => enabled.has(c.short)));      // только выбранные виды
 
-  // Обращение: у трезвучий их три (0…2), у аккордов из четырёх и более нот — четыре (0…3).
-  // Если выбранного обращения у аккорда нет (3-е для трезвучия) — берём старшее из доступных.
-  const maxInversion = Math.min(MAX_INVERSION, steps.length - 1);
+  // Если выбранного обращения у аккорда нет (3-е для трезвучия, любое для rootOnly) — берём
+  // старшее из доступных. При случайном обращении аккорд с двойником даётся только в основном виде
+  const maxInversion = maxInversionOf(chord);
   const random = inversionEl.value === 'random';
-  const inversion = random ? ET.rand(maxInversion + 1) : Math.min(Number(inversionEl.value), maxInversion);
+  const inversion = random
+    ? (hasTwin(chord) ? 0 : ET.rand(maxInversion + 1))
+    : Math.min(Number(inversionEl.value), maxInversion);
 
-  // В обращении N басом становится N-я нота аккорда, а ноты ниже неё переносятся вверх на октаву
-  // (у аккордов шире октавы, например add9, — на две, иначе они остались бы ниже баса)
-  const bass = steps[inversion];
-  const offsets = steps.map((s, i) => {
-    if (i >= inversion) return s;
-    while (s < bass) s += 12;
-    return s;
-  }).sort((a, b) => a - b);
-  const lowestRoot = CHORD_LOW - offsets[0];
-  const highestRoot = ET.HIGH - offsets[offsets.length - 1];
+  const tones = voicing(chord, inversion);
+  const lowestRoot = CHORD_LOW - tones[0].offset;
+  const highestRoot = ET.HIGH - tones[tones.length - 1].offset;
   const root = lowestRoot + ET.rand(highestRoot - lowestRoot + 1);
 
-  const mode = modeEl.value;
-  const arpeggio = mode === 'arpeggio' || (mode === 'mixed' && ET.rand(2) === 0);
+  const arpeggio = ET.modeIs(modeEl.value, 'arpeggio');
 
-  return { index, inversion, random, arpeggio, notes: offsets.map((o) => root + o) };
+  return {
+    chord, inversion, random, arpeggio, root,
+    notes: tones.map((tone) => root + tone.offset),       // MIDI снизу вверх
+    letters: tones.map((tone) => tone.letters),           // буквы тех же нот — для записи
+  };
 }
 
 // Планирует аккорд с момента t, возвращает его длительность в секундах
@@ -168,12 +205,13 @@ function play(q, t, beat) {
 }
 
 function describe(q) {
+  const names = ET.spellNotes(q.root, q.notes.map((midi, i) => ({ midi, letters: q.letters[i] })));
   return {
     label: q.arpeggio ? 'arpeggio' : 'block',
-    answer: CHORDS[q.index].name,
-    notes: `${q.notes.map(ET.noteName).join(' ')} · ${INVERSIONS[q.inversion]}`,
+    answer: q.chord.name,
+    notes: `${names.join(' ')} · ${INVERSIONS[q.inversion]}`,
     // Обращение произносится, только когда оно случайное — иначе оно и так известно
-    voice: q.random ? [q.index, INVERSION_VOICE + q.inversion] : q.index,
+    voice: q.random ? [sayOf(q.chord), INVERSION_SAY[q.inversion]] : sayOf(q.chord),
   };
 }
 </script>

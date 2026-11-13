@@ -4,24 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111418">
 <title>Intervals · Ear Trainer</title>
 <link rel="stylesheet" href="assets/css/common.css">
 </head>
 <body>
-  <a class="back" href="index.html">‹ Trainers</a>
-
-  <div class="screen">
-    <div id="status">Press Start</div>
-    <div id="answer"></div>
-    <div id="notes"></div>
-    <div id="diag"></div>
-  </div>
-
+  <!-- Только настройки этой тренировки. Остальное — ссылку «назад», экран с ответом, поля
+       Tempo/Repeats/Replay и кнопки Start/Stop — достраивает движок (EarTrainer.create) -->
   <div class="controls">
     <div id="intervals" class="toggles" role="group" aria-label="Intervals"></div>
-    <label>Tempo, bpm
-      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
-    </label>
     <label>Mode
       <select id="mode">
         <option value="melodic">Melodic</option>
@@ -36,16 +28,6 @@
         <option value="mixed" selected>Mixed</option>
       </select>
     </label>
-    <label>Repeats
-      <input id="repeats" type="number" inputmode="numeric" min="1" max="8" step="1" value="4">
-    </label>
-    <label>Replay after answer
-      <input id="replay" type="checkbox" checked>
-    </label>
-    <div class="buttons">
-      <button id="start">Start</button>
-      <button id="stop" disabled>Stop</button>
-    </div>
   </div>
 
 <script src="assets/voice/intervals.js"></script>
@@ -54,10 +36,11 @@
 // Тренировка интервалов. Общий движок (звук, цикл, голос, настройки) — в assets/js/common.js.
 const ET = EarTrainer;
 
-const HALF_BEATS = 2;      // мелодически: каждая нота — половинная
-const WHOLE_BEATS = 4;     // гармонически: целая нота
+const WHOLE_BEATS = ET.BAR_BEATS;      // гармонически: целая нота — такт
+const HALF_BEATS = WHOLE_BEATS / 2;    // мелодически: каждая нота — половинная
 
-// Индекс = число полутонов; тот же порядок в assets/voice/intervals.js и make-voice.sh
+// Индекс = число полутонов. Название — оно же фраза для голоса: такие же должны быть
+// в make-voice.sh (ветка intervals), иначе запись не найдётся
 const INTERVALS = [
   null,
   'Minor second', 'Major second', 'Minor third', 'Major third',
@@ -65,11 +48,14 @@ const INTERVALS = [
   'Major sixth', 'Minor seventh', 'Major seventh', 'Octave',
 ];
 const SHORT_NAMES = [null, 'm2', 'M2', 'm3', 'M3', 'P4', 'TT', 'P5', 'm6', 'M6', 'm7', 'M7', 'P8'];
+// На сколько букв верхняя нота отстоит от нижней (для записи нот: терция от C — это E или E♭,
+// но не D♯). Тритон — увеличенная кварта или уменьшённая квинта: берётся запись с меньшим числом знаков
+const LETTER_STEPS = [null, 1, 1, 2, 2, 3, [3, 4], 4, 5, 5, 6, 6, 7];
 
 const modeEl = document.getElementById('mode');
 const directionEl = document.getElementById('direction');
 
-const trainer = ET.create({ id: 'intervals', pickQuestion, play, describe });
+const trainer = ET.create({ id: 'intervals', pickQuestion, play, describe, phrases: INTERVALS.slice(1) });
 trainer.persist(modeEl, 'mode');
 trainer.persist(directionEl, 'direction');
 
@@ -82,15 +68,13 @@ const enabled = trainer.toggleGroup(
 
 function pickQuestion() {
   const pool = [...enabled];       // только выбранные интервалы
-  const semitones = pool[ET.rand(pool.length)];
+  const semitones = ET.pick(pool);
   const low = ET.LOW + ET.rand(ET.HIGH - ET.LOW - semitones + 1);
   const high = low + semitones;
-  const mode = modeEl.value;
-  const harmonic = mode === 'harmonic' || (mode === 'mixed' && ET.rand(2) === 0);
-  const dir = directionEl.value;   // влияет только на мелодический режим
-  const ascending = harmonic || dir === 'up' || (dir === 'mixed' && ET.rand(2) === 0);
+  const harmonic = ET.modeIs(modeEl.value, 'harmonic');
+  const ascending = harmonic || ET.modeIs(directionEl.value, 'up');     // направление — только у мелодических
   return {
-    semitones, harmonic, ascending,
+    semitones, harmonic, ascending, low, high,
     first: ascending ? low : high,
     second: ascending ? high : low,
   };
@@ -111,13 +95,18 @@ function play(q, t, beat) {
 }
 
 function describe(q) {
+  // Ноты записываются от нижней, какой бы ни была первая по порядку
+  const [low, high] = ET.spellNotes(q.low, [
+    { midi: q.low, letters: 0 },
+    { midi: q.high, letters: LETTER_STEPS[q.semitones] },
+  ]);
   return {
     label: q.harmonic ? 'harmonic' : 'melodic',
     answer: INTERVALS[q.semitones],
     notes: q.harmonic
-      ? `${ET.noteName(q.first)} + ${ET.noteName(q.second)}`
-      : `${ET.noteName(q.first)} ${q.ascending ? '↑' : '↓'} ${ET.noteName(q.second)}`,
-    voice: q.semitones,
+      ? `${low} + ${high}`
+      : q.ascending ? `${low} ↑ ${high}` : `${high} ↓ ${low}`,
+    voice: INTERVALS[q.semitones],
   };
 }
 </script>
