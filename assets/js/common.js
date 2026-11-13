@@ -264,6 +264,19 @@ window.EarTrainer = (() => {
       const my = ++runId;
       startBtn.disabled = true;
       stopBtn.disabled = false;
+      try {
+        await loop(my);
+      } catch (e) {
+        // Сбой звука или ошибка в коде тренировки: не оставляем интерфейс в состоянии
+        // «идёт тренировка», а останавливаемся и показываем причину
+        console.error(e);
+        if (my !== runId) return;        // запуск уже отменён — сообщение было бы не к месту
+        stop();
+        statusEl.textContent = `Error: ${e?.message || e}`;
+      }
+    }
+
+    async function loop(my) {
       trainer.onStart?.();
 
       await ensureAudio();
@@ -340,7 +353,7 @@ window.EarTrainer = (() => {
     // После сворачивания/звонка Safari приостанавливает звук — возобновляем при возврате
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible' || stopBtn.disabled) return;
-      ctx?.resume();
+      ctx?.resume().catch(() => {});
     });
 
     // iOS может прервать контекст при блокировке экрана (state «interrupted»/«suspended»).
