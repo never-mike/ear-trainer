@@ -10,23 +10,13 @@
 <link rel="stylesheet" href="assets/css/common.css">
 </head>
 <body>
-  <a class="back" href="index.html">‹ Trainers</a>
-
-  <div class="screen">
-    <div id="status">Press Start</div>
-    <div id="answer"></div>
-    <div id="notes"></div>
-    <div id="diag"></div>
-  </div>
-
+  <!-- Только настройки этой тренировки. Остальное — ссылку «назад», экран с ответом, поля
+       Tempo/Repeats/Replay и кнопки Start/Stop — достраивает движок (EarTrainer.create) -->
   <div class="controls">
     <details class="group">
       <summary>Chord types <span id="chordCount"></span></summary>
       <div id="chords" class="toggles cols-5" role="group" aria-label="Chord types"></div>
     </details>
-    <label>Tempo, bpm
-      <input id="bpm" type="number" inputmode="numeric" min="30" max="240" step="1" value="80">
-    </label>
     <label>Mode
       <select id="mode">
         <option value="block" selected>Block</option>
@@ -43,16 +33,6 @@
         <option value="random">Random</option>
       </select>
     </label>
-    <label>Repeats
-      <input id="repeats" type="number" inputmode="numeric" min="1" max="8" step="1" value="4">
-    </label>
-    <label>Replay after answer
-      <input id="replay" type="checkbox" checked>
-    </label>
-    <div class="buttons">
-      <button id="start">Start</button>
-      <button id="stop" disabled>Stop</button>
-    </div>
   </div>
 
 <script src="assets/voice/chords.js"></script>

@@ -15,9 +15,13 @@
 //                     (или массив фраз — записи прозвучат подряд)
 //   phrases         — необязательный: все фразы, которые тренировка может произнести; при первом
 //                     Start сверяются с файлом голоса, недостающие выводятся в #diag
+//   repeats         — необязательный: сколько раз подряд звучит вопрос по умолчанию (поле Repeats);
+//                     если не задан — DEFAULT_REPEATS
 //   onStart()       — необязательный: вызывается при каждом нажатии Start
-// Разметка страницы должна содержать элементы #status, #answer, #notes, #diag, #bpm, #repeats,
-// #replay, #start и #stop; файл с голосом (window.VOICE_DATA) подключается перед этим скриптом.
+// В разметке страницы нужен только блок .controls с настройками самой тренировки: ссылку в меню,
+// экран с ответом (#status, #answer, #notes, #diag), поля #bpm, #repeats, #replay и кнопки #start,
+// #stop движок достраивает сам (buildPage). Файл с голосом (window.VOICE_DATA) подключается
+// перед этим скриптом.
 
 // Офлайн-кеш (sw.js) — только при открытии по http(s): на file:// service worker недоступен.
 // Этот файл подключён и в меню (index.html) — ради этой регистрации.
@@ -30,6 +34,9 @@ window.EarTrainer = (() => {
   const LOW = 40;            // E2 — нижняя граница: диапазон выбран так, чтобы ноты можно было пропеть
   const HIGH = 76;           // E5 — верхняя граница
   const DEFAULT_BPM = 80;    // темп по умолчанию, размер 4/4
+  const MIN_BPM = 30;
+  const MAX_BPM = 240;
+  const DEFAULT_REPEATS = 4; // сколько раз подряд звучит вопрос, если тренировка не задала своё значение
   const BAR_BEATS = 4;       // паузы (на раздумье и после ответа) — целый такт
   const MAX_REPEATS = 8;     // верхняя граница поля «Repeats»
   const VOLUME = 0.3;
@@ -182,7 +189,37 @@ window.EarTrainer = (() => {
     };
   }
 
+  // Достраивает страницу тренировки вокруг её блока .controls: перед ним — ссылка в меню и экран
+  // с ответом, в конце него — общие для всех тренировок настройки и кнопки Start/Stop.
+  // Так новая тренировка описывает в разметке только свои поля
+  function buildPage(repeats) {
+    const controls = document.querySelector('.controls');
+    controls.insertAdjacentHTML('beforebegin', `
+      <a class="back" href="index.html">‹ Trainers</a>
+      <div class="screen">
+        <div id="status">Press Start</div>
+        <div id="answer"></div>
+        <div id="notes"></div>
+        <div id="diag"></div>
+      </div>`);
+    controls.insertAdjacentHTML('beforeend', `
+      <label>Tempo, bpm
+        <input id="bpm" type="number" inputmode="numeric" min="${MIN_BPM}" max="${MAX_BPM}" step="1" value="${DEFAULT_BPM}">
+      </label>
+      <label>Repeats
+        <input id="repeats" type="number" inputmode="numeric" min="1" max="${MAX_REPEATS}" step="1" value="${repeats}">
+      </label>
+      <label>Replay after answer
+        <input id="replay" type="checkbox" checked>
+      </label>
+      <div class="buttons">
+        <button id="start">Start</button>
+        <button id="stop" disabled>Stop</button>
+      </div>`);
+  }
+
   function create(trainer) {
+    buildPage(trainer.repeats || DEFAULT_REPEATS);
     const $ = (id) => document.getElementById(id);
     const statusEl = $('status');
     const answerEl = $('answer');
@@ -260,7 +297,7 @@ window.EarTrainer = (() => {
 
     // Длительность одной доли в секундах по текущему темпу из поля ввода
     function beatSec() {
-      const bpm = Math.min(240, Math.max(30, Number(bpmEl.value) || DEFAULT_BPM));
+      const bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, Number(bpmEl.value) || DEFAULT_BPM));
       return 60 / bpm;
     }
 
@@ -319,7 +356,7 @@ window.EarTrainer = (() => {
     let runId = 0;        // меняется при каждом старте/стопе — так отменяется текущий цикл
 
     // Сколько раз подряд звучит вопрос; значение по умолчанию у каждой тренировки своё —
-    // это атрибут value поля #repeats в разметке
+    // параметр repeats, он же атрибут value (defaultValue) поля #repeats
     function repeatCount() {
       const n = Math.round(Number(repeatsEl.value)) || Number(repeatsEl.defaultValue) || 1;
       return Math.min(MAX_REPEATS, Math.max(1, n));
