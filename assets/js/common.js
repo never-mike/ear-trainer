@@ -27,6 +27,9 @@ window.EarTrainer = (() => {
   const TONE_FADE = 0.3;     // время появления и затухания тянущегося тона (дрона), с
   const VOICE_GAIN = 2.5;    // громкость голоса относительно нот
   const VOICE_GAP = 0.15;    // пауза между записями, если ответ состоит из нескольких, с
+  const LOOKAHEAD = 0.15;    // за сколько до начала фазы цикл просыпается, чтобы её запланировать, с
+  const POLL = 0.05;         // минимальный шаг ожидания аудиочасов (в том числе пока контекст стоит), с
+  const MIN_LEAD = 0.05;     // минимальный запас от текущего момента до планируемого звука, с
 
   const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
   const rand = (n) => Math.floor(Math.random() * n);
@@ -204,10 +207,9 @@ window.EarTrainer = (() => {
       diagEl.textContent = expected && ok === expected ? '' : `Voice: ${ok}/${expected} loaded — ${lastError}`;
     }
 
-    // Произносит ответ: одну запись или несколько подряд (indices — индекс или массив индексов).
+    // Произносит ответ с момента start: одну запись или несколько подряд (indices — индекс или массив индексов).
     // Возвращает общую длительность в секундах (0 — если записей нет)
-    function speak(indices) {
-      const start = ctx.currentTime + 0.08;
+    function speak(indices, start) {
       let t = start;
       for (const index of [].concat(indices)) {
         const buf = voiceBuffers?.[index];
@@ -235,14 +237,28 @@ window.EarTrainer = (() => {
       return Math.min(MAX_REPEATS, Math.max(1, n));
     }
 
-    // Планирует вопрос times раз подряд без пауз, возвращает общую длительность в секундах
-    function playQuestion(q, times, replay) {
-      const start = ctx.currentTime + 0.08;
+    // Планирует вопрос с момента start times раз подряд без пауз, возвращает общую длительность в секундах
+    function playQuestion(q, times, replay, start) {
       const beat = beatSec();
       let total = 0;
       for (let i = 0; i < times; i++) total += trainer.play(q, start + total, beat, { replay, repeat: i });
       return total;
     }
+
+    // Ждёт, пока аудиочасы не подойдут к моменту time (с запасом LOOKAHEAD на планирование).
+    // Ожидание привязано к ctx.currentTime, а не к таймеру: если iOS приостановила контекст,
+    // аудиочасы стоят — и цикл стоит вместе с ними, а не планирует звуки в одну точку.
+    // Возвращается и при отмене запуска, поэтому после вызова нужна обычная проверка runId
+    async function waitUntil(time, my) {
+      while (my === runId) {
+        const left = time - LOOKAHEAD - ctx.currentTime;
+        if (left <= 0) return;
+        await sleep(Math.max(left, POLL));
+      }
+    }
+
+    // Момент начала очередной фазы: по сетке, но не в прошлом, если таймер проснулся с опозданием
+    const notBefore = (time) => Math.max(time, ctx.currentTime + MIN_LEAD);
 
     async function run() {
       const my = ++runId;
@@ -265,6 +281,7 @@ window.EarTrainer = (() => {
       runGain.connect(ctx.destination);
 
       let count = 0;
+      let at = 0;           // момент на аудиочасах, с которого начинается очередная фаза цикла
       while (my === runId) {
         const q = trainer.pickQuestion();
         const info = trainer.describe(q);
@@ -273,26 +290,31 @@ window.EarTrainer = (() => {
         statusEl.textContent = info.label ? `#${count} · ${info.label}` : `#${count}`;
         answerEl.textContent = '?';
         notesEl.textContent = '';
-        let len = playQuestion(q, repeatCount(), false);
-        await sleep(len + BAR_BEATS * beatSec());
+        at = notBefore(at);
+        at += playQuestion(q, repeatCount(), false, at) + BAR_BEATS * beatSec();
+        await waitUntil(at, my);
         if (my !== runId) break;
 
         // Ответ: текст на экране + голос (на голос отводится такт)
         answerEl.textContent = info.answer;
         notesEl.textContent = info.notes || '';
-        const spoken = speak(info.voice);
+        at = notBefore(at);
+        const spoken = speak(info.voice, at);
         if (spoken) {
-          await sleep(Math.max(BAR_BEATS * beatSec(), spoken + 0.2));
+          at += Math.max(BAR_BEATS * beatSec(), spoken + 0.2);
+          await waitUntil(at, my);
           if (my !== runId) break;
         }
 
         if (replayEl.checked) {
           // Повтор вопроса (один раз), чтобы услышать его, уже зная ответ, и пауза в такт
-          len = playQuestion(q, 1, true);
-          await sleep(len + BAR_BEATS * beatSec());
+          at = notBefore(at);
+          at += playQuestion(q, 1, true, at) + BAR_BEATS * beatSec();
+          await waitUntil(at, my);
         } else if (!spoken) {
           // Без повтора и без голоса — такт тишины, чтобы успеть прочитать ответ
-          await sleep(BAR_BEATS * beatSec());
+          at += BAR_BEATS * beatSec();
+          await waitUntil(at, my);
         }
       }
     }
