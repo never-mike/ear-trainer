@@ -52,6 +52,13 @@ case "$TRAINER" in
     ;;
 esac
 
+# say при неизвестном голосе не падает, а молча говорит голосом по умолчанию — проверяем имя сами
+voices=("${(@f)$(say -v '?' | sed -E 's/ +[a-z]{2,3}_[A-Za-z0-9]+ +#.*$//')}")
+if (( ! ${voices[(Ie)$VOICE]} )); then
+  echo "Неизвестный голос: $VOICE (список: say -v '?')" >&2
+  exit 1
+fi
+
 OUT="assets/voice/$TRAINER.js"
 mkdir -p assets/voice
 tmp=$(mktemp -d)
@@ -68,6 +75,10 @@ trap 'rm -rf "$tmp"' EXIT
     echo "  '$(base64 -i "$tmp/$i.m4a")',  // ${names[$i]}"
   done
   echo "];"
-} > "$OUT"
+} > "$tmp/out.js"
+
+# Пишем во временный файл и переносим только готовый: при сбое (например, неизвестный голос)
+# прежний файл с голосом остаётся целым
+mv "$tmp/out.js" "$OUT"
 
 echo "$OUT: $(wc -c < "$OUT" | tr -d ' ') байт"
