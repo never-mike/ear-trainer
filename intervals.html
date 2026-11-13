@@ -67,6 +67,9 @@ const INTERVALS = [
   'Major sixth', 'Minor seventh', 'Major seventh', 'Octave',
 ];
 const SHORT_NAMES = [null, 'm2', 'M2', 'm3', 'M3', 'P4', 'TT', 'P5', 'm6', 'M6', 'm7', 'M7', 'P8'];
+// На сколько букв верхняя нота отстоит от нижней (для записи нот: терция от C — это E или E♭,
+// но не D♯). Тритон — увеличенная кварта или уменьшённая квинта: берётся запись с меньшим числом знаков
+const LETTER_STEPS = [null, 1, 1, 2, 2, 3, [3, 4], 4, 5, 5, 6, 6, 7];
 
 const modeEl = document.getElementById('mode');
 const directionEl = document.getElementById('direction');
@@ -92,7 +95,7 @@ function pickQuestion() {
   const dir = directionEl.value;   // влияет только на мелодический режим
   const ascending = harmonic || dir === 'up' || (dir === 'mixed' && ET.rand(2) === 0);
   return {
-    semitones, harmonic, ascending,
+    semitones, harmonic, ascending, low, high,
     first: ascending ? low : high,
     second: ascending ? high : low,
   };
@@ -113,12 +116,17 @@ function play(q, t, beat) {
 }
 
 function describe(q) {
+  // Ноты записываются от нижней, какой бы ни была первая по порядку
+  const [low, high] = ET.spellNotes(q.low, [
+    { midi: q.low, letters: 0 },
+    { midi: q.high, letters: LETTER_STEPS[q.semitones] },
+  ]);
   return {
     label: q.harmonic ? 'harmonic' : 'melodic',
     answer: INTERVALS[q.semitones],
     notes: q.harmonic
-      ? `${ET.noteName(q.first)} + ${ET.noteName(q.second)}`
-      : `${ET.noteName(q.first)} ${q.ascending ? '↑' : '↓'} ${ET.noteName(q.second)}`,
+      ? `${low} + ${high}`
+      : q.ascending ? `${low} ↑ ${high}` : `${high} ↓ ${low}`,
     voice: q.semitones,
   };
 }

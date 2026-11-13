@@ -28,18 +28,6 @@
     <label>Key
       <select id="key">
         <option value="random" selected>Random</option>
-        <option value="0">C</option>
-        <option value="1">D♭</option>
-        <option value="2">D</option>
-        <option value="3">E♭</option>
-        <option value="4">E</option>
-        <option value="5">F</option>
-        <option value="6">F♯</option>
-        <option value="7">G</option>
-        <option value="8">A♭</option>
-        <option value="9">A</option>
-        <option value="10">B♭</option>
-        <option value="11">B</option>
       </select>
     </label>
     <label>Bars
@@ -93,16 +81,7 @@ const NUMERALS = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };   // всегда в основном виде
 const SUFFIX = { maj: '', min: 'm', dim: '°' };
 
-// Тональности: letter — индекс буквы тоники в LETTERS (нужен для правильной записи ♯/♭ в названиях
-// аккордов), pc — высотный класс тоники. Порядок совпадает со значениями <select id="key">.
-const LETTERS = 'CDEFGAB';
-const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
-const KEYS = [
-  { name: 'C', letter: 0, pc: 0 },   { name: 'D♭', letter: 1, pc: 1 },  { name: 'D', letter: 1, pc: 2 },
-  { name: 'E♭', letter: 2, pc: 3 },  { name: 'E', letter: 2, pc: 4 },   { name: 'F', letter: 3, pc: 5 },
-  { name: 'F♯', letter: 3, pc: 6 },  { name: 'G', letter: 4, pc: 7 },   { name: 'A♭', letter: 5, pc: 8 },
-  { name: 'A', letter: 5, pc: 9 },   { name: 'B♭', letter: 6, pc: 10 }, { name: 'B', letter: 6, pc: 11 },
-];
+const KEYS = ET.KEYS;      // тональности — общие для всех тренировок, см. common.js
 
 // Общепринятые последовательности; числа — ступени 1…7
 const COMMON = [
@@ -141,6 +120,7 @@ const sourceEl = document.getElementById('source');
 const sameEl = document.getElementById('same');
 
 const trainer = ET.create({ id: 'progressions', pickQuestion, play, describe, onStart });
+ET.fillKeys(keyEl);        // до persist, иначе сохранённая тональность не восстановится
 trainer.persist(keyEl, 'key');
 trainer.persist(barsEl, 'bars');
 trainer.persist(sourceEl, 'source');
@@ -214,15 +194,13 @@ function pickQuestion() {
   }
 
   let key = Number(keyEl.value);
-  if (keyEl.value === 'random' || !KEYS[key]) {
-    do { key = ET.rand(KEYS.length); } while (key === lastKey);
-  }
+  if (keyEl.value === 'random' || !KEYS[key]) key = ET.randExcept(KEYS.length, lastKey);
   lastKey = key;
 
   // Аккорды всегда в основном виде: бас — основной тон в октаве E2…D♯3, трезвучие — октавой выше
   const chords = degrees.map((degree) => {
     const rootPc = (KEYS[key].pc + MAJOR_SCALE[degree]) % 12;
-    const bass = BASS_LOW + ((rootPc - BASS_LOW) % 12 + 12) % 12;
+    const bass = ET.atOrAbove(rootPc, BASS_LOW);
     return { bass, upper: TRIAD[QUALITY[degree]].map((step) => bass + 12 + step) };
   });
 
@@ -250,10 +228,7 @@ function play(q, t, beat) {
 
 // Название аккорда на ступени: буква берётся по гамме, знак — по разнице с высотой этой буквы
 function chordName(key, degree) {
-  const letter = (KEYS[key].letter + degree) % 7;
-  const pc = (KEYS[key].pc + MAJOR_SCALE[degree]) % 12;
-  const shift = ((pc - LETTER_PC[letter] + 18) % 12) - 6;      // −1 бемоль, 0, +1 диез
-  return LETTERS[letter] + (shift < 0 ? '♭' : shift > 0 ? '♯' : '') + SUFFIX[QUALITY[degree]];
+  return ET.spell(KEYS[key].letter + degree, KEYS[key].pc + MAJOR_SCALE[degree]) + SUFFIX[QUALITY[degree]];
 }
 
 // Раскладывает такты по четыре в строке

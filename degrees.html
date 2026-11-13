@@ -24,18 +24,6 @@
     <label>Key
       <select id="key">
         <option value="random" selected>Random</option>
-        <option value="0">C</option>
-        <option value="1">D♭</option>
-        <option value="2">D</option>
-        <option value="3">E♭</option>
-        <option value="4">E</option>
-        <option value="5">F</option>
-        <option value="6">F♯</option>
-        <option value="7">G</option>
-        <option value="8">A♭</option>
-        <option value="9">A</option>
-        <option value="10">B♭</option>
-        <option value="11">B</option>
       </select>
     </label>
     <label>Tempo, bpm
@@ -76,21 +64,12 @@ const DEGREES = [
   { name: '6',  letter: 5 }, { name: '♭7', letter: 6 }, { name: '7',  letter: 6 },
 ];
 
-// Тональности: letter — индекс буквы тоники в LETTERS, pc — высотный класс тоники.
-// Порядок совпадает со значениями <select id="key">.
-const LETTERS = 'CDEFGAB';
-const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];
-const ACCIDENTALS = { '-2': '♭♭', '-1': '♭', 0: '', 1: '♯', 2: '♯♯' };
-const KEYS = [
-  { name: 'C', letter: 0, pc: 0 },   { name: 'D♭', letter: 1, pc: 1 },  { name: 'D', letter: 1, pc: 2 },
-  { name: 'E♭', letter: 2, pc: 3 },  { name: 'E', letter: 2, pc: 4 },   { name: 'F', letter: 3, pc: 5 },
-  { name: 'F♯', letter: 3, pc: 6 },  { name: 'G', letter: 4, pc: 7 },   { name: 'A♭', letter: 5, pc: 8 },
-  { name: 'A', letter: 5, pc: 9 },   { name: 'B♭', letter: 6, pc: 10 }, { name: 'B', letter: 6, pc: 11 },
-];
+const KEYS = ET.KEYS;      // тональности — общие для всех тренировок, см. common.js
 
 const keyEl = document.getElementById('key');
 
 const trainer = ET.create({ id: 'degrees', pickQuestion, play, describe, onStart });
+ET.fillKeys(keyEl);        // до persist, иначе сохранённая тональность не восстановится
 trainer.persist(keyEl, 'key');
 
 // Полутоны от тоники, которые участвуют в тренировке
@@ -123,9 +102,7 @@ function pickQuestion() {
     if (key !== fixed) asked = 0;
     key = fixed;
   } else if (key < 0 || asked >= QUESTIONS_PER_KEY) {
-    let next;
-    do { next = ET.rand(KEYS.length); } while (next === key);
-    key = next;
+    key = ET.randExcept(KEYS.length, key);
     asked = 0;
   }
   asked++;
@@ -135,8 +112,8 @@ function pickQuestion() {
   do { degree = pool[ET.rand(pool.length)]; } while (pool.length > 1 && degree === lastDegree);
   lastDegree = degree;
 
-  const low = DRONE_LOW + ((KEYS[key].pc - DRONE_LOW) % 12 + 12) % 12;   // нижняя тоника дрона
-  const high = low + 12;                                                  // верхняя тоника дрона
+  const low = ET.atOrAbove(KEYS[key].pc, DRONE_LOW);     // нижняя тоника дрона
+  const high = low + 12;                                  // верхняя тоника дрона
   // Нота — в одной из двух октав над верхней тоникой дрона, в пределах диапазона;
   // с самой тоникой дрона не совпадает, иначе её не было бы слышно отдельно
   const candidates = [high + degree, high + 12 + degree].filter((n) => n <= ET.HIGH && n !== high);
@@ -165,10 +142,7 @@ function play(q, t, beat, pass) {
 
 // Название ноты на ступени: буква берётся по ступени, знак — по разнице с высотой этой буквы
 function noteName(keyIndex, degree) {
-  const letter = (KEYS[keyIndex].letter + DEGREES[degree].letter) % 7;
-  const pc = (KEYS[keyIndex].pc + degree) % 12;
-  const shift = ((pc - LETTER_PC[letter] + 18) % 12) - 6;
-  return LETTERS[letter] + ACCIDENTALS[shift];
+  return ET.spell(KEYS[keyIndex].letter + DEGREES[degree].letter, KEYS[keyIndex].pc + degree);
 }
 
 function describe(q) {

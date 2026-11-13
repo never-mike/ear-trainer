@@ -38,10 +38,84 @@ window.EarTrainer = (() => {
   const POLL = 0.05;         // минимальный шаг ожидания аудиочасов (в том числе пока контекст стоит), с
   const MIN_LEAD = 0.05;     // минимальный запас от текущего момента до планируемого звука, с
 
-  const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
   const rand = (n) => Math.floor(Math.random() * n);
-  const noteName = (midi) => NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
   const sleep = (sec) => new Promise((r) => setTimeout(r, sec * 1000));
+
+  // Случайное число 0…n−1, не равное except, — чтобы тональность не выпадала дважды подряд
+  function randExcept(n, except) {
+    let value;
+    do { value = rand(n); } while (n > 1 && value === except);
+    return value;
+  }
+
+  // ---------- Теория: тональности и запись нот ----------
+  // Нота записывается буквой и знаком. Буква задаётся индексом в LETTERS (0…6) и определяется
+  // ролью ноты (ступень лада, тон аккорда, интервал), а знак — разницей между нужной высотой
+  // и высотой этой буквы. Так терция от D♭ получается F, а не E♯, и Cm — C E♭ G, а не C D♯ G.
+  const LETTERS = 'CDEFGAB';
+  const LETTER_PC = [0, 2, 4, 5, 7, 9, 11];     // высотный класс каждой буквы без знака
+  const ACCIDENTALS = { '-2': '♭♭', '-1': '♭', 0: '', 1: '♯', 2: '♯♯' };
+
+  // Мажорные тональности: letter — индекс буквы тоники в LETTERS, pc — высотный класс тоники.
+  // Индекс совпадает с pc; этот же порядок — у значений списка тональностей (fillKeys).
+  const KEYS = [
+    { name: 'C', letter: 0, pc: 0 },   { name: 'D♭', letter: 1, pc: 1 },  { name: 'D', letter: 1, pc: 2 },
+    { name: 'E♭', letter: 2, pc: 3 },  { name: 'E', letter: 2, pc: 4 },   { name: 'F', letter: 3, pc: 5 },
+    { name: 'F♯', letter: 3, pc: 6 },  { name: 'G', letter: 4, pc: 7 },   { name: 'A♭', letter: 5, pc: 8 },
+    { name: 'A', letter: 5, pc: 9 },   { name: 'B♭', letter: 6, pc: 10 }, { name: 'B', letter: 6, pc: 11 },
+  ];
+
+  const mod = (n, m) => ((n % m) + m) % m;
+
+  // На сколько полутонов высота pitch (высотный класс или MIDI) отстоит от буквы без знака:
+  // −1 — бемоль, 0 — без знака, +1 — диез, ±2 — дубль
+  const accidental = (letter, pitch) => mod(pitch - LETTER_PC[mod(letter, 7)] + 6, 12) - 6;
+
+  // Название высотного класса на заданной букве: spell(2, 3) → 'E♭', spell(1, 3) → 'D♯'
+  const spell = (letter, pc) => LETTERS[mod(letter, 7)] + ACCIDENTALS[accidental(letter, pc)];
+
+  // То же для ноты с номером октавы. Октава считается по букве: B♯3 звучит как C4, C♭4 — как B3
+  function spellNote(letter, midi) {
+    const shift = accidental(letter, midi);
+    return spell(letter, midi) + (Math.floor((midi - shift) / 12) - 1);
+  }
+
+  // Записывает группу нот (интервал, аккорд) относительно основного тона root (MIDI).
+  // notes: [{ midi, letters }], letters — на сколько букв нота отстоит от основного тона
+  // (терция — 2, квинта — 4, нона — 1 …) или массив таких вариантов (тритон: [3, 4]).
+  // Основной тон на чёрной клавише можно записать и с диезом, и с бемолем — выбирается запись,
+  // при которой у всей группы меньше знаков (D♭ F, а не C♯ E♯; C♯ E G♯, а не D♭ F♭ A♭);
+  // при равенстве — как в KEYS. Возвращает названия нот с октавой в порядке notes.
+  function spellNotes(root, notes) {
+    const key = KEYS[mod(root, 12)];
+    const rootLetters = [key.letter];
+    if (accidental(key.letter, root) > 0) rootLetters.push(key.letter + 1);       // F♯ → G♭
+    else if (accidental(key.letter, root) < 0) rootLetters.push(key.letter - 1);  // D♭ → C♯
+
+    let best = null;
+    for (const rootLetter of rootLetters) {
+      let cost = Math.abs(accidental(rootLetter, root));
+      const names = notes.map(({ midi, letters }) => {
+        // Из вариантов буквы для ноты берём тот, где меньше знаков
+        const options = [].concat(letters).map((l) => rootLetter + l);
+        const letter = options.reduce((a, b) =>
+          (Math.abs(accidental(b, midi)) < Math.abs(accidental(a, midi)) ? b : a));
+        cost += Math.abs(accidental(letter, midi));
+        return spellNote(letter, midi);
+      });
+      if (!best || cost < best.cost) best = { cost, names };
+    }
+    return best.names;
+  }
+
+  // Самая низкая нота (MIDI) высотного класса pc не ниже low
+  const atOrAbove = (pc, low) => low + mod(pc - low, 12);
+
+  // Добавляет в <select> тональности из KEYS (значение — индекс). Вызывать до persist,
+  // иначе сохранённый выбор не восстановится
+  function fillKeys(select) {
+    KEYS.forEach((key, i) => select.add(new Option(key.name, i)));
+  }
 
   // ---------- Звук ----------
   let ctx = null;
@@ -378,5 +452,8 @@ window.EarTrainer = (() => {
     return { persist, toggleGroup };
   }
 
-  return { LOW, HIGH, rand, noteName, playNote, startTone, create };
+  return {
+    LOW, HIGH, KEYS, rand, randExcept, spell, spellNotes, atOrAbove, fillKeys,
+    playNote, startTone, create,
+  };
 })();
