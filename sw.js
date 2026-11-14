@@ -14,6 +14,7 @@ const CACHE = 'ear-trainer';
 const FILES = [
   './',
   'index.html',
+  'manifest.webmanifest',
   'intervals.html',
   'chords.html',
   'progressions.html',
