@@ -6,6 +6,10 @@
 // Стратегия — «сначала сеть»: пока сеть есть, всегда отдаётся свежая версия (и кладётся в кеш),
 // поэтому после выкладки обновления ничего сбрасывать не нужно. Кеш используется, только когда
 // сеть недоступна.
+//
+// Запросы идут с cache: 'no-cache' — мимо HTTP-кеша браузера, с проверкой по ETag. Иначе браузер
+// отдавал бы файлы из своего кеша: GitHub Pages разрешает держать их 10 минут, и сразу после
+// выкладки страница и common.js могли бы прийти из разных версий
 const CACHE = 'ear-trainer';
 
 // Кешируются при установке, чтобы без сети работали и те тренировки, которые ещё не открывали.
@@ -30,7 +34,7 @@ const FILES = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(FILES))
+      .then((cache) => cache.addAll(FILES.map((file) => new Request(file, { cache: 'no-cache' }))))
       .then(() => self.skipWaiting()),
   );
 });
@@ -46,7 +50,13 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
-      const response = await fetch(request);
+      // Навигационный запрос (открытие страницы) пересоздаётся по URL: у его копии Chrome
+      // не применяет cache: 'no-cache' и отдаёт страницу из HTTP-кеша. redirect: 'manual' —
+      // чтобы редирект, если он будет, выполнил сам браузер, а не воркер
+      const fresh = request.mode === 'navigate'
+        ? new Request(request.url, { cache: 'no-cache', redirect: 'manual' })
+        : new Request(request, { cache: 'no-cache' });
+      const response = await fetch(fresh);
       // waitUntil — чтобы запись крупного файла (голос) не оборвалась вместе с воркером
       if (response.ok) event.waitUntil(cache.put(request, response.clone()));
       return response;

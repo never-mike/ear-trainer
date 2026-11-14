@@ -45,6 +45,11 @@ window.EarTrainer = (() => {
   const VOICE_GAIN = 2.5;    // громкость голоса относительно нот
   const VOICE_GAP = 0.15;    // пауза между записями, если ответ состоит из нескольких, с
   const LOOKAHEAD = 0.15;    // за сколько до начала фазы цикл просыпается, чтобы её запланировать, с
+  // То же, пока страница скрыта (экран заблокирован, приложение в фоне). Таймеры там могут
+  // срабатывать с опозданием до секунды, и с обычным запасом следующее звучание вопроса
+  // планировалось бы поздно — между повторами появлялись бы паузы. Цена: настройки, пока
+  // экран заблокирован, читаются на секунду раньше
+  const HIDDEN_LOOKAHEAD = 1.3;
   const POLL = 0.05;         // минимальный шаг ожидания аудиочасов (в том числе пока контекст стоит), с
   const MIN_LEAD = 0.05;     // минимальный запас от текущего момента до планируемого звука, с
 
@@ -385,7 +390,7 @@ window.EarTrainer = (() => {
     // Возвращается и при отмене запуска, поэтому после вызова нужна обычная проверка runId
     async function waitUntil(time, my) {
       while (my === runId) {
-        const left = time - LOOKAHEAD - ctx.currentTime;
+        const left = time - (document.hidden ? HIDDEN_LOOKAHEAD : LOOKAHEAD) - ctx.currentTime;
         if (left <= 0) return;
         await sleep(Math.max(left, POLL));
       }
@@ -395,6 +400,10 @@ window.EarTrainer = (() => {
     const notBefore = (time) => Math.max(time, ctx.currentTime + MIN_LEAD);
 
     async function run() {
+      // Если в числовом поле осталось набранное, но не подтверждённое значение (клавиатуру
+      // не закрыли), снимаем фокус: поле получит change, и значение применится и сохранится,
+      // а не останется на экране без действия
+      document.activeElement?.blur();
       const my = ++runId;
       startBtn.disabled = true;
       stopBtn.disabled = false;

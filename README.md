@@ -28,7 +28,7 @@ A chord is played and you name its quality.
 
 - 33 chord types: triads, seventh chords, sixths, added-tone, altered and extended chords. The first 12 (triads and seventh chords) are enabled by default.
 - Mode: block chord, arpeggio or mixed.
-- Inversion: root position, 1st, 2nd, 3rd or random. Chords with added or omitted tones (5, 6/9, add9, add11, 11) are always played in root position. With random inversions the voice also names the inversion. Chords that sound identical to another enabled chord in some inversion (for example, sus2 in 2nd inversion and sus4 in root position) are then played in root position only, so every question has one answer.
+- Inversion: root position, 1st, 2nd, 3rd or random. Chords with added or omitted tones (5, 6/9, add9, madd9, add11, 11) are always played in root position. With random inversions the voice also names the inversion. Chords that sound identical to another enabled chord in some inversion (for example, sus2 in 2nd inversion and sus4 in root position) are then played in root position only, so every question has one answer.
 
 ### Progressions
 
@@ -56,7 +56,7 @@ Notes stay between E2 and E5, a range chosen so that you can sing along with wha
 
 Open `index.html` in a browser. The pages work straight from the file system, so no web server is needed.
 
-To use it on a phone, host the repository on any static hosting (for example GitHub Pages) and open the URL in Safari. Deploy `index.html`, the trainer pages, `sw.js` and the whole `assets/` folder. Then add the page to the Home Screen (Share → Add to Home Screen) and launch it from the icon, so that playback continues with the screen locked.
+To use it on a phone, host the repository on any static hosting (for example GitHub Pages) and open the URL in Safari. Deploy `index.html`, the trainer pages, `sw.js`, `manifest.webmanifest` and the whole `assets/` folder (on GitHub Pages the whole repository is published anyway). Then add the page to the Home Screen (Share → Add to Home Screen) and launch it from the icon, so that playback continues with the screen locked. The icon always opens the menu, whichever page it was added from.
 
 Once opened online, the hosted version is cached by a service worker and keeps working without a network connection. When online it always loads the latest deployed version.
 
@@ -73,6 +73,7 @@ assets/
   js/common.js        shared engine: audio, voice, Start/Stop loop, tempo, settings
   voice/*.js          generated voice answers, one file per trainer
 sw.js                 service worker: offline cache
+manifest.webmanifest  web app manifest for the Home Screen
 make-voice.sh         regenerates the voice files
 ```
 
